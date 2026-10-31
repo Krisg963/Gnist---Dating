@@ -11,6 +11,14 @@ import type {
   StreamComment,
 } from '../types';
 
+function getTodayDateKey(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 const INITIAL_FALLBACK_STATE: ServerState = {
   currentUser: {
     id: 'me',
@@ -36,6 +44,9 @@ const INITIAL_FALLBACK_STATE: ServerState = {
   swipeStats: {
     rightCount: 5,
     leftCount: 3,
+    dailyGoal: 5,
+    dailyCount: 1,
+    dailyDate: getTodayDateKey(),
   },
   swipedRightIds: ['ingrid'],
   swipedLeftIds: [],
@@ -406,10 +417,17 @@ export function useRealtimeApp() {
         });
         setServerState((prev) => {
           const wasLeft = prev.swipedLeftIds.includes(profileId);
+          const wasRight = prev.swipedRightIds.includes(profileId);
+          const todayKey = getTodayDateKey();
+          const baseDailyCount =
+            prev.swipeStats.dailyDate === todayKey
+              ? prev.swipeStats.dailyCount
+              : 0;
+          const isNewDailySwipe = !wasLeft && !wasRight;
           return {
             ...prev,
             swipedRightIds:
-              direction === 'right' && !prev.swipedRightIds.includes(profileId)
+              direction === 'right' && !wasRight
                 ? [...prev.swipedRightIds, profileId]
                 : prev.swipedRightIds,
             swipedLeftIds:
@@ -428,13 +446,17 @@ export function useRealtimeApp() {
               ...prev.swipeHistory.filter((h) => h.profileId !== profileId),
             ].slice(0, 10),
             swipeStats: {
+              ...prev.swipeStats,
               rightCount:
-                prev.swipeStats.rightCount + (direction === 'right' ? 1 : 0),
+                prev.swipeStats.rightCount +
+                (direction === 'right' && !wasRight ? 1 : 0),
               leftCount: Math.max(
                 0,
                 prev.swipeStats.leftCount +
-                  (direction === 'left' ? 1 : wasLeft ? -1 : 0)
+                  (direction === 'left' && !wasLeft ? 1 : wasLeft ? -1 : 0)
               ),
+              dailyCount: baseDailyCount + (isNewDailySwipe ? 1 : 0),
+              dailyDate: todayKey,
             },
           };
         });
@@ -908,6 +930,43 @@ export function useRealtimeApp() {
     return false;
   }, []);
 
+  const updateDailySwipeGoal = useCallback(async (dailyGoal: number) => {
+    const clampedGoal = Math.min(
+      100,
+      Math.max(1, Math.round(Number(dailyGoal) || 5))
+    );
+    const todayKey = getTodayDateKey();
+
+    setServerState((prev) => ({
+      ...prev,
+      swipeStats: {
+        ...prev.swipeStats,
+        dailyGoal: clampedGoal,
+        dailyCount:
+          prev.swipeStats.dailyDate === todayKey
+            ? prev.swipeStats.dailyCount
+            : 0,
+        dailyDate: todayKey,
+      },
+    }));
+
+    try {
+      const res = await fetch('/api/swipe-goal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dailyGoal: clampedGoal }),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { state: ServerState };
+        setServerState(data.state);
+        return true;
+      }
+    } catch {
+      return true;
+    }
+    return false;
+  }, []);
+
   const saveVideoIntro = useCallback(
     async (payload: {
       videoIntroUrl: string | null;
@@ -1272,6 +1331,7 @@ export function useRealtimeApp() {
     clearLocationError,
     verifyProfile,
     updateProfile,
+    updateDailySwipeGoal,
     saveVideoIntro,
     startMyStream,
     stopMyStream,

@@ -79,6 +79,9 @@ export interface SwipeHistoryEntry {
 export interface SwipeStats {
   rightCount: number;
   leftCount: number;
+  dailyGoal: number;
+  dailyCount: number;
+  dailyDate: string;
 }
 
 export interface LikeReceived {

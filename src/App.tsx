@@ -95,6 +95,7 @@ export default function App() {
     clearLocationError,
     verifyProfile,
     updateProfile,
+    updateDailySwipeGoal,
     saveVideoIntro,
     startMyStream,
     stopMyStream,
@@ -749,6 +750,8 @@ export default function App() {
                   onSendTestPush: pushState.sendTestPush,
                 }}
                 onSaveProfile={updateProfile}
+                onUpdateDailyGoal={updateDailySwipeGoal}
+                onGoToSwipe={() => navigateToTab('swipe')}
                 onUnblockUser={unblockUser}
                 onSelectHistoryProfile={(p) => setSelectedProfile(p)}
                 onSelectInterest={(interest) =>

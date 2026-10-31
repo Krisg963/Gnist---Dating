@@ -10,10 +10,12 @@ import {
   CheckCheck,
   CheckCircle2,
   Eye,
+  Flame,
   Heart,
   History,
   ImagePlus,
   MapPin,
+  Minus,
   Monitor,
   Moon,
   Plus,
@@ -22,11 +24,12 @@ import {
   Sparkles,
   Star,
   Sun,
+  Target,
   Trash2,
   Video,
   X,
 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import {
   DEFAULT_USER_PHOTOS,
   EDUCATION_OPTIONS,
@@ -78,6 +81,8 @@ interface MyProfileViewProps {
   themeControls: ThemeControlsProps;
   pushControls: PushControlsProps;
   onSaveProfile: (updates: Partial<CurrentUser>) => Promise<boolean>;
+  onUpdateDailyGoal: (dailyGoal: number) => Promise<boolean>;
+  onGoToSwipe: () => void;
   onUnblockUser: (profileId: string) => Promise<void>;
   onSelectHistoryProfile: (profile: DatingProfile) => void;
   onSelectInterest: (interest: string) => void;
@@ -86,6 +91,8 @@ interface MyProfileViewProps {
   onOpenVerificationModal: () => void;
   onPreviewPublicModal: (publicProfile: DatingProfile) => void;
 }
+
+const DAILY_GOAL_PRESETS = [3, 5, 10, 15, 25];
 
 function compressImageFile(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -134,6 +141,8 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
   themeControls,
   pushControls,
   onSaveProfile,
+  onUpdateDailyGoal,
+  onGoToSwipe,
   onUnblockUser,
   onSelectHistoryProfile,
   onSelectInterest,
@@ -142,6 +151,7 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
   onOpenVerificationModal,
   onPreviewPublicModal,
 }) => {
+  const prefersReducedMotion = Boolean(useReducedMotion());
   const savedPhotos =
     currentUser.photos !== null ? currentUser.photos : DEFAULT_USER_PHOTOS;
 
@@ -161,6 +171,13 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
   const [photos, setPhotos] = useState<string[]>(savedPhotos);
   const [customInterest, setCustomInterest] = useState('');
 
+  // Daily Swipe Goal State
+  const [dailyGoalDraft, setDailyGoalDraft] = useState<number>(
+    Math.max(1, swipeStats.dailyGoal || 5)
+  );
+  const [savingGoal, setSavingGoal] = useState(false);
+  const [goalSavedFeedback, setGoalSavedFeedback] = useState(false);
+
   // UI State
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -172,6 +189,7 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
     'all' | 'right' | 'left'
   >('all');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const goalSavedTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     setName(currentUser.name);
@@ -186,6 +204,52 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
       currentUser.photos !== null ? currentUser.photos : DEFAULT_USER_PHOTOS
     );
   }, [currentUser]);
+
+  useEffect(() => {
+    setDailyGoalDraft(Math.max(1, swipeStats.dailyGoal || 5));
+  }, [swipeStats.dailyGoal]);
+
+  useEffect(() => {
+    return () => {
+      if (goalSavedTimerRef.current) {
+        clearTimeout(goalSavedTimerRef.current);
+      }
+    };
+  }, []);
+
+  // Daily Swipe Goal Calculation
+  const dailyGoal = Math.min(100, Math.max(1, swipeStats.dailyGoal || 5));
+  const dailyCount = Math.max(0, swipeStats.dailyCount || 0);
+  const dailyProgressRatio = Math.min(1, dailyCount / dailyGoal);
+  const dailyProgressPercent = Math.min(
+    100,
+    Math.round((dailyCount / dailyGoal) * 100)
+  );
+  const remainingDailySwipes = Math.max(0, dailyGoal - dailyCount);
+  const isDailyGoalReached = dailyCount >= dailyGoal;
+  const ringRadius = 28;
+  const ringCircumference = 2 * Math.PI * ringRadius;
+  const ringDashOffset = ringCircumference * (1 - dailyProgressRatio);
+
+  const handleApplyDailyGoal = async (nextGoalRaw: number) => {
+    const clamped = Math.min(
+      100,
+      Math.max(1, Math.round(Number(nextGoalRaw) || 5))
+    );
+    setDailyGoalDraft(clamped);
+    setSavingGoal(true);
+    const ok = await onUpdateDailyGoal(clamped);
+    setSavingGoal(false);
+    if (ok) {
+      setGoalSavedFeedback(true);
+      if (goalSavedTimerRef.current) {
+        clearTimeout(goalSavedTimerRef.current);
+      }
+      goalSavedTimerRef.current = window.setTimeout(() => {
+        setGoalSavedFeedback(false);
+      }, 2400);
+    }
+  };
 
   // Swipe Statistics Calculation
   const totalSwipes = swipeStats.rightCount + swipeStats.leftCount;
@@ -386,6 +450,248 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
                 Du har ikke valgt noen interesser ennå. Legg til interesser i skjemaet nedenfor for å aktivere interesse-merker.
               </p>
             )}
+          </div>
+
+          {/* 0B. DAGLIGE SVEIPE-MÅL MODUL */}
+          <div className="rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5 sm:p-7 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+              <div className="flex items-start gap-2.5">
+                <Target
+                  className={`w-5 h-5 mt-0.5 shrink-0 ${
+                    isDailyGoalReached
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : 'text-rose-600 dark:text-rose-400'
+                  }`}
+                />
+                <div>
+                  <h2 className="text-base sm:text-lg font-bold text-zinc-900 dark:text-zinc-50">
+                    Daglige sveipe-mål
+                  </h2>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed">
+                    Sett hvor mange profiler du vil vurdere hver dag og følg fremdriften din i sanntid.
+                  </p>
+                </div>
+              </div>
+
+              {isDailyGoalReached ? (
+                <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400 shrink-0 whitespace-nowrap">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>Dagens mål er nådd!</span>
+                </span>
+              ) : (
+                <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-300 tabular-nums shrink-0 whitespace-nowrap">
+                  {remainingDailySwipes} sveip gjenstår i dag
+                </span>
+              )}
+            </div>
+
+            {/* Progress Ring + Numeric Readout + Linear Progress Indicator */}
+            <div className="mt-5 p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-100 dark:border-zinc-800">
+              <div className="flex items-center gap-4">
+                <div className="relative w-[68px] h-[68px] shrink-0 flex items-center justify-center">
+                  <svg
+                    width="68"
+                    height="68"
+                    viewBox="0 0 68 68"
+                    className="-rotate-90"
+                    aria-hidden="true"
+                  >
+                    <circle
+                      cx="34"
+                      cy="34"
+                      r={ringRadius}
+                      fill="none"
+                      strokeWidth="6"
+                      className="stroke-zinc-200 dark:stroke-zinc-700"
+                    />
+                    <motion.circle
+                      cx="34"
+                      cy="34"
+                      r={ringRadius}
+                      fill="none"
+                      strokeWidth="6"
+                      strokeLinecap="round"
+                      strokeDasharray={ringCircumference}
+                      initial={false}
+                      animate={{ strokeDashoffset: ringDashOffset }}
+                      transition={
+                        prefersReducedMotion
+                          ? { duration: 0 }
+                          : { duration: 0.35, ease: [0.16, 1, 0.3, 1] }
+                      }
+                      className={
+                        isDailyGoalReached
+                          ? 'stroke-emerald-600 dark:stroke-emerald-400'
+                          : 'stroke-rose-600 dark:stroke-rose-500'
+                      }
+                    />
+                  </svg>
+                  <span className="absolute text-xs font-bold text-zinc-900 dark:text-zinc-50 tabular-nums">
+                    {dailyProgressPercent}%
+                  </span>
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-zinc-50 tabular-nums">
+                      {dailyCount}{' '}
+                      <span className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+                        av {dailyGoal} sveip i dag
+                      </span>
+                    </p>
+                  </div>
+
+                  <div
+                    role="progressbar"
+                    aria-label="Fremdrift mot daglig sveipe-mål"
+                    aria-valuemin={0}
+                    aria-valuemax={dailyGoal}
+                    aria-valuenow={Math.min(dailyCount, dailyGoal)}
+                    className="mt-2.5 h-3 w-full rounded-full bg-zinc-200 dark:bg-zinc-700 overflow-hidden flex"
+                  >
+                    <motion.div
+                      initial={false}
+                      animate={{ scaleX: dailyProgressRatio }}
+                      style={{ width: '100%', transformOrigin: 'left' }}
+                      transition={
+                        prefersReducedMotion
+                          ? { duration: 0 }
+                          : { duration: 0.3, ease: [0.16, 1, 0.3, 1] }
+                      }
+                      className={`h-full ${
+                        isDailyGoalReached
+                          ? 'bg-emerald-600 dark:bg-emerald-500'
+                          : 'bg-rose-600'
+                      }`}
+                    />
+                  </div>
+
+                  <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-300 leading-snug">
+                    {isDailyGoalReached
+                      ? `Sterkt levert! Du har fullført ${dailyCount} sveip og nådd dagens mål på ${dailyGoal}.`
+                      : dailyCount === 0
+                        ? `Du har ikke sveipet ennå i dag — ta ${dailyGoal} sveip for å nå målet ditt.`
+                        : `Du er ${dailyProgressPercent}% på vei mot dagens mål — bare ${remainingDailySwipes} sveip igjen.`}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Goal Configuration: Quick Presets + Custom Stepper */}
+            <div className="mt-4 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                  Velg daglig mål (antall sveip per dag)
+                </span>
+                {goalSavedFeedback && (
+                  <span
+                    role="status"
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Mål oppdatert</span>
+                  </span>
+                )}
+              </div>
+
+              <div
+                role="group"
+                aria-label="Hurtigvalg for daglig sveipe-mål"
+                className="grid grid-cols-5 gap-2"
+              >
+                {DAILY_GOAL_PRESETS.map((preset) => {
+                  const isSelected = dailyGoal === preset;
+                  return (
+                    <button
+                      key={preset}
+                      type="button"
+                      disabled={savingGoal}
+                      onClick={() => void handleApplyDailyGoal(preset)}
+                      className={`min-h-[44px] px-2.5 py-2 rounded-xl text-xs sm:text-sm font-semibold tabular-nums transition whitespace-nowrap shrink-0 ${
+                        isSelected
+                          ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-xs'
+                          : 'border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-700'
+                      }`}
+                    >
+                      {preset} sveip
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="pt-1 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <label
+                    htmlFor="custom-daily-goal-input"
+                    className="text-xs text-zinc-500 dark:text-zinc-400 whitespace-nowrap"
+                  >
+                    Egendefinert mål:
+                  </label>
+                  <div className="inline-flex items-center rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setDailyGoalDraft((prev) => Math.max(1, prev - 1))
+                      }
+                      disabled={dailyGoalDraft <= 1 || savingGoal}
+                      className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white disabled:opacity-40 transition"
+                      aria-label="Reduser daglig mål med 1"
+                    >
+                      <Minus className="w-4 h-4" />
+                    </button>
+                    <input
+                      id="custom-daily-goal-input"
+                      type="number"
+                      min={1}
+                      max={100}
+                      value={dailyGoalDraft}
+                      onChange={(e) => {
+                        const parsed = parseInt(e.target.value, 10);
+                        if (Number.isNaN(parsed)) {
+                          setDailyGoalDraft(1);
+                        } else {
+                          setDailyGoalDraft(Math.min(100, Math.max(1, parsed)));
+                        }
+                      }}
+                      className="w-14 min-h-[44px] text-center bg-transparent text-sm font-bold text-zinc-900 dark:text-zinc-100 tabular-nums focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setDailyGoalDraft((prev) => Math.min(100, prev + 1))
+                      }
+                      disabled={dailyGoalDraft >= 100 || savingGoal}
+                      className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white disabled:opacity-40 transition"
+                      aria-label="Øk daglig mål med 1"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {dailyGoalDraft !== dailyGoal && (
+                    <button
+                      type="button"
+                      disabled={savingGoal}
+                      onClick={() => void handleApplyDailyGoal(dailyGoalDraft)}
+                      className="min-h-[44px] px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs sm:text-sm font-semibold transition whitespace-nowrap shrink-0"
+                    >
+                      Lagre mål
+                    </button>
+                  )}
+                </div>
+
+                {!isDailyGoalReached && (
+                  <button
+                    type="button"
+                    onClick={onGoToSwipe}
+                    className="min-h-[44px] px-4 py-2 rounded-xl border border-rose-200 dark:border-rose-800/80 bg-rose-50/70 dark:bg-rose-950/35 hover:bg-rose-100/80 dark:hover:bg-rose-950/60 text-xs sm:text-sm font-semibold text-rose-700 dark:text-rose-300 inline-flex items-center gap-1.5 transition whitespace-nowrap shrink-0"
+                  >
+                    <Flame className="w-4 h-4 shrink-0" />
+                    <span>Fortsett å sveipe</span>
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* 1. SVEIPE-STATISTIKK MODUL */}

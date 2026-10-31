@@ -55,6 +55,9 @@ interface SwipeHistoryEntry {
 interface SwipeStats {
   rightCount: number;
   leftCount: number;
+  dailyGoal: number;
+  dailyCount: number;
+  dailyDate: string;
 }
 
 interface LikeReceived {
@@ -306,7 +309,21 @@ function persistPushSubscriptions() {
   }
 }
 
+function getTodayDateKey(date: Date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function clampDailyGoal(value: unknown, fallback = 5): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(100, Math.max(1, Math.round(parsed)));
+}
+
 function createInitialState(): ServerState {
+  const todayKey = getTodayDateKey();
   return {
     currentUser: {
       id: 'me',
@@ -332,6 +349,9 @@ function createInitialState(): ServerState {
     swipeStats: {
       rightCount: 5,
       leftCount: 3,
+      dailyGoal: 5,
+      dailyCount: 1,
+      dailyDate: todayKey,
     },
     swipedRightIds: ['ingrid'],
     swipedLeftIds: [],
@@ -589,6 +609,30 @@ function loadState(): ServerState {
         rawMessagesByMatch[mId] = updatedMsgs;
       }
 
+      const migratedHistory = Array.isArray(raw.swipeHistory)
+        ? raw.swipeHistory.slice(0, 10)
+        : defaults.swipeHistory;
+
+      const todayKey = getTodayDateKey();
+      const rawStats = (raw.swipeStats || {}) as Partial<SwipeStats>;
+      const resolvedDailyGoal = clampDailyGoal(
+        rawStats.dailyGoal,
+        defaults.swipeStats.dailyGoal
+      );
+
+      let resolvedDailyCount = defaults.swipeStats.dailyCount;
+      if (rawStats.dailyDate === todayKey && typeof rawStats.dailyCount === 'number' && Number.isFinite(rawStats.dailyCount)) {
+        resolvedDailyCount = Math.max(0, Math.round(rawStats.dailyCount));
+      } else if (typeof rawStats.dailyDate === 'string' && rawStats.dailyDate !== todayKey) {
+        resolvedDailyCount = 0;
+      } else {
+        resolvedDailyCount = migratedHistory.filter(
+          (entry) =>
+            typeof entry.swipedAt === 'string' &&
+            entry.swipedAt.startsWith('I dag')
+        ).length;
+      }
+
       return {
         ...defaults,
         ...raw,
@@ -604,11 +648,12 @@ function loadState(): ServerState {
         },
         swipeStats: {
           ...defaults.swipeStats,
-          ...(raw.swipeStats || {}),
+          ...rawStats,
+          dailyGoal: resolvedDailyGoal,
+          dailyCount: resolvedDailyCount,
+          dailyDate: todayKey,
         },
-        swipeHistory: Array.isArray(raw.swipeHistory)
-          ? raw.swipeHistory.slice(0, 10)
-          : defaults.swipeHistory,
+        swipeHistory: migratedHistory,
         blockedUsers: Array.isArray(raw.blockedUsers) ? raw.blockedUsers : [],
         reportedUsers: Array.isArray(raw.reportedUsers)
           ? raw.reportedUsers
@@ -622,6 +667,16 @@ function loadState(): ServerState {
 }
 
 const state: ServerState = loadState();
+
+function syncDailySwipeRollover(): boolean {
+  const todayKey = getTodayDateKey();
+  if (state.swipeStats.dailyDate !== todayKey) {
+    state.swipeStats.dailyDate = todayKey;
+    state.swipeStats.dailyCount = 0;
+    return true;
+  }
+  return false;
+}
 
 function persistState() {
   try {
@@ -848,6 +903,8 @@ async function startServer() {
   }
 
   async function handleSwipe(profileId: string, direction: 'left' | 'right') {
+    syncDailySwipeRollover();
+
     if (isProfileBlocked(profileId)) {
       return { matched: false, match: null };
     }
@@ -859,8 +916,10 @@ async function startServer() {
       return { matched: Boolean(existingMatch), match: existingMatch };
     }
 
+    const wasPreviouslySwipedLeft = state.swipedLeftIds.includes(profileId);
+
     // Already swiped left: if passing again, no-op; if liking now (fixing a feilsveip from Sveipe-historikk!), allow changing to right!
-    if (state.swipedLeftIds.includes(profileId)) {
+    if (wasPreviouslySwipedLeft) {
       if (direction === 'left') {
         return { matched: false, match: null };
       }
@@ -880,6 +939,10 @@ async function startServer() {
 
     if (prevLikeIdx >= 0) {
       state.likesReceived.splice(prevLikeIdx, 1);
+    }
+
+    if (!wasPreviouslySwipedLeft) {
+      state.swipeStats.dailyCount += 1;
     }
 
     if (direction === 'left') {
@@ -1489,7 +1552,11 @@ async function startServer() {
 
   // Standard App Routes
   app.get('/api/state', (_req, res) => {
-    pruneExpiredLiveLocations();
+    const rolledOver = syncDailySwipeRollover();
+    const pruned = pruneExpiredLiveLocations();
+    if (rolledOver && !pruned) {
+      persistState();
+    }
     res.json(state);
   });
 
@@ -1506,7 +1573,24 @@ async function startServer() {
     res.json({ ...result, state });
   });
 
+  app.post('/api/swipe-goal', (req, res) => {
+    syncDailySwipeRollover();
+    const { dailyGoal } = req.body as { dailyGoal?: number };
+    if (typeof dailyGoal !== 'number' || !Number.isFinite(dailyGoal)) {
+      res.status(400).json({ error: 'Ugyldig daglig sveipe-mål' });
+      return;
+    }
+    state.swipeStats.dailyGoal = clampDailyGoal(
+      dailyGoal,
+      state.swipeStats.dailyGoal
+    );
+    persistState();
+    broadcast('state:sync', state);
+    res.json({ ok: true, swipeStats: state.swipeStats, state });
+  });
+
   app.post('/api/rewind', (_req, res) => {
+    syncDailySwipeRollover();
     const last = swipeHistoryStack.pop();
     if (!last) {
       res.json({ rewound: false, state });
@@ -1525,6 +1609,9 @@ async function startServer() {
       state.swipeStats.rightCount -= 1;
     } else if (last.direction === 'left' && state.swipeStats.leftCount > 0) {
       state.swipeStats.leftCount -= 1;
+    }
+    if (state.swipeStats.dailyCount > 0) {
+      state.swipeStats.dailyCount -= 1;
     }
 
     if (last.previousLikeReceived) {
