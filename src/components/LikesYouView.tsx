@@ -36,29 +36,29 @@ export const LikesYouView: React.FC<LikesYouViewProps> = ({
     <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-8">
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 mb-6">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-900">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
             Hvem likte deg
           </h1>
-          <p className="text-sm text-zinc-500 mt-1">
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
             Personer som allerede har sveipet høyre på profilen din — match tilbake direkte
           </p>
         </div>
 
-        <span className="text-sm font-medium text-zinc-600 tabular-nums">
+        <span className="text-sm font-medium text-zinc-600 dark:text-zinc-400 tabular-nums">
           {populated.length}{' '}
           {populated.length === 1 ? 'person venter på svar' : 'personer venter på svar'}
         </span>
       </div>
 
       {populated.length === 0 ? (
-        <div className="rounded-3xl border border-zinc-200 bg-white p-10 sm:p-14 text-center max-w-xl mx-auto">
-          <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto mb-4">
+        <div className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-10 sm:p-14 text-center max-w-xl mx-auto">
+          <div className="w-12 h-12 rounded-2xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center mx-auto mb-4">
             <MessageSquareHeart className="w-6 h-6" />
           </div>
-          <h2 className="text-xl font-bold text-zinc-900 text-balance">
+          <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-50 text-balance">
             Du har svart på alle som har likt deg hittil
           </h2>
-          <p className="text-sm text-zinc-500 mt-2">
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-2">
             Start en samtale med matchene dine eller utforsk flere profiler i nærheten.
           </p>
           <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
@@ -72,7 +72,7 @@ export const LikesYouView: React.FC<LikesYouViewProps> = ({
             <button
               type="button"
               onClick={onGoToSwipe}
-              className="w-full sm:w-auto min-h-[48px] px-5 py-2.5 rounded-xl border border-zinc-200 bg-white text-zinc-800 text-sm font-medium hover:bg-zinc-50 transition whitespace-nowrap"
+              className="w-full sm:w-auto min-h-[48px] px-5 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-100 text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-700 transition whitespace-nowrap"
             >
               Sveip videre
             </button>
@@ -89,13 +89,13 @@ export const LikesYouView: React.FC<LikesYouViewProps> = ({
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.94 }}
                 transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
-                className="rounded-3xl bg-white border border-zinc-200 overflow-hidden shadow-xs flex flex-col justify-between"
+                className="rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-xs flex flex-col justify-between"
               >
               <div>
                 <button
                   type="button"
                   onClick={() => onSelectProfile(profile)}
-                  className="relative w-full aspect-[4/4] bg-zinc-100 block text-left group overflow-hidden"
+                  className="relative w-full aspect-[4/4] bg-zinc-100 dark:bg-zinc-800 block text-left group overflow-hidden"
                   aria-label={`Åpne profilen til ${profile.name}`}
                 >
                   <SafeImage
@@ -128,10 +128,10 @@ export const LikesYouView: React.FC<LikesYouViewProps> = ({
 
                 {/* Personal Note / Compliment */}
                 <div className="p-4 sm:p-5">
-                  <p className="text-xs font-medium text-zinc-400">
+                  <p className="text-xs font-medium text-zinc-400 dark:text-zinc-500">
                     Kommentar til profilen din
                   </p>
-                  <p className="text-sm text-zinc-800 mt-1 leading-relaxed">
+                  <p className="text-sm text-zinc-800 dark:text-zinc-200 mt-1 leading-relaxed">
                     «{like.note}»
                   </p>
                 </div>
@@ -142,7 +142,7 @@ export const LikesYouView: React.FC<LikesYouViewProps> = ({
                 <button
                   type="button"
                   onClick={() => onDismissLike(profile.id)}
-                  className="min-h-[48px] px-4 rounded-xl border border-zinc-200 bg-white text-zinc-700 text-sm font-medium inline-flex items-center justify-center gap-1.5 hover:bg-zinc-50 active:scale-[0.98] transition whitespace-nowrap"
+                  className="min-h-[48px] px-4 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 text-sm font-medium inline-flex items-center justify-center gap-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-700 active:scale-[0.98] transition whitespace-nowrap"
                   aria-label={`Fjern ${profile.name}`}
                 >
                   <X className="w-4 h-4" />

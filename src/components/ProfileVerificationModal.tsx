@@ -143,16 +143,16 @@ export const ProfileVerificationModal: React.FC<
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full sm:max-w-lg max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl bg-white shadow-2xl pb-safe"
+        className="w-full sm:max-w-lg max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-2xl pb-safe transition-colors"
         role="dialog"
         aria-modal="true"
         aria-labelledby="verification-modal-title"
       >
-        <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-md px-5 sm:px-7 py-4 border-b border-zinc-100 flex items-center justify-between">
+        <div className="sticky top-0 z-10 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md px-5 sm:px-7 py-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <h2
               id="verification-modal-title"
-              className="text-lg font-bold text-zinc-900"
+              className="text-lg font-bold text-zinc-900 dark:text-zinc-50"
             >
               Selfie-verifisering
             </h2>
@@ -162,7 +162,7 @@ export const ProfileVerificationModal: React.FC<
           <button
             type="button"
             onClick={onClose}
-            className="min-h-[44px] min-w-[44px] -mr-2 flex items-center justify-center text-zinc-400 hover:text-zinc-900"
+            className="min-h-[44px] min-w-[44px] -mr-2 flex items-center justify-center text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition"
             aria-label="Lukk verifisering"
           >
             <X className="w-5 h-5" />
@@ -171,13 +171,13 @@ export const ProfileVerificationModal: React.FC<
 
         <div className="p-5 sm:p-7 space-y-5">
           {currentUser.verified && (
-            <div className="rounded-2xl bg-sky-50 border border-sky-200 p-4 flex items-start gap-3">
-              <CheckCircle2 className="w-5 h-5 text-sky-600 shrink-0 mt-0.5" />
+            <div className="rounded-2xl bg-sky-50 dark:bg-sky-950/50 border border-sky-200 dark:border-sky-800 p-4 flex items-start gap-3">
+              <CheckCircle2 className="w-5 h-5 text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-semibold text-sky-950">
+                <p className="text-sm font-semibold text-sky-950 dark:text-sky-100">
                   Profilen din er offisielt verifisert
                 </p>
-                <p className="text-xs text-sky-800 mt-0.5">
+                <p className="text-xs text-sky-800 dark:text-sky-300 mt-0.5">
                   Det blå verifiseringsmerket vises på din offentlige profil ({currentUser.verificationPose}).
                 </p>
               </div>
@@ -185,9 +185,9 @@ export const ProfileVerificationModal: React.FC<
           )}
 
           {/* Pose Instruction Card */}
-          <div className="rounded-2xl border border-zinc-200 p-4 sm:p-5 bg-zinc-50/70">
+          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 sm:p-5 bg-zinc-50/70 dark:bg-zinc-800/50">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-semibold text-sky-700 inline-flex items-center gap-1.5">
+              <span className="text-xs font-semibold text-sky-700 dark:text-sky-400 inline-flex items-center gap-1.5">
                 <ShieldCheck className="w-4 h-4" />
                 <span>Oppgave: Match denne posen</span>
               </span>
@@ -196,17 +196,17 @@ export const ProfileVerificationModal: React.FC<
                 onClick={() =>
                   setPoseIndex((i) => (i + 1) % VERIFICATION_POSES.length)
                 }
-                className="min-h-[36px] px-2.5 rounded-lg text-xs font-medium text-zinc-600 hover:text-zinc-900 inline-flex items-center gap-1"
+                className="min-h-[36px] px-2.5 rounded-lg text-xs font-medium text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-50 inline-flex items-center gap-1 transition"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 <span>Bytt pose</span>
               </button>
             </div>
 
-            <h3 className="text-base font-bold text-zinc-900 mt-2">
+            <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-50 mt-2">
               {currentPose.title}
             </h3>
-            <p className="text-sm text-zinc-600 mt-1 leading-relaxed">
+            <p className="text-sm text-zinc-600 dark:text-zinc-300 mt-1 leading-relaxed">
               {currentPose.instruction}
             </p>
           </div>
@@ -233,7 +233,7 @@ export const ProfileVerificationModal: React.FC<
                 <button
                   type="button"
                   onClick={() => setCameraOpen(false)}
-                  className="flex-1 min-h-[48px] rounded-xl border border-zinc-200 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition"
+                  className="flex-1 min-h-[48px] rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-sm font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition"
                 >
                   Avbryt
                 </button>
@@ -250,7 +250,7 @@ export const ProfileVerificationModal: React.FC<
           ) : (
             <div className="space-y-3">
               {capturedSelfie && (
-                <div className="relative w-44 aspect-[3/4] mx-auto rounded-2xl overflow-hidden border border-zinc-200 bg-zinc-100">
+                <div className="relative w-44 aspect-[3/4] mx-auto rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800">
                   <img
                     src={capturedSelfie}
                     alt="Tatt verifiseringsselfie"
@@ -261,7 +261,7 @@ export const ProfileVerificationModal: React.FC<
               )}
 
               {cameraUnavailable && (
-                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-3">
+                <p className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 rounded-xl p-3">
                   Direktekamera ble avvist eller mangler på enheten. Du kan
                   laste opp en selfie fra kamerarullen eller bruke hurtigtest
                   nedenfor.
@@ -272,7 +272,7 @@ export const ProfileVerificationModal: React.FC<
                 <button
                   type="button"
                   onClick={() => setCameraOpen(true)}
-                  className="min-h-[48px] px-4 py-3 rounded-xl bg-zinc-900 text-white text-sm font-semibold inline-flex items-center justify-center gap-2 hover:bg-zinc-800 transition whitespace-nowrap"
+                  className="min-h-[48px] px-4 py-3 rounded-xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-sm font-semibold inline-flex items-center justify-center gap-2 hover:bg-zinc-800 dark:hover:bg-white transition whitespace-nowrap"
                 >
                   <Camera className="w-4 h-4" />
                   <span>Åpne selfie-kamera</span>
@@ -281,7 +281,7 @@ export const ProfileVerificationModal: React.FC<
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="min-h-[48px] px-4 py-3 rounded-xl border border-zinc-200 bg-white text-zinc-800 text-sm font-semibold inline-flex items-center justify-center gap-2 hover:bg-zinc-50 transition whitespace-nowrap"
+                  className="min-h-[48px] px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-100 text-sm font-semibold inline-flex items-center justify-center gap-2 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition whitespace-nowrap"
                 >
                   <Upload className="w-4 h-4" />
                   <span>Velg / ta bilde</span>
@@ -300,7 +300,7 @@ export const ProfileVerificationModal: React.FC<
                 <button
                   type="button"
                   onClick={generateStudioSelfiePreview}
-                  className="w-full min-h-[44px] rounded-xl text-xs font-medium text-zinc-500 hover:text-zinc-900 hover:bg-zinc-50 transition"
+                  className="w-full min-h-[44px] rounded-xl text-xs font-medium text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
                 >
                   Ingen kamera tilgjengelig? Generer testsammenligning for pose
                 </button>

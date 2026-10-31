@@ -7,16 +7,21 @@ import {
   Bell,
   BellOff,
   Check,
+  CheckCheck,
   CheckCircle2,
   Eye,
   Heart,
   History,
   ImagePlus,
   MapPin,
+  Monitor,
+  Moon,
   Plus,
   Send,
   ShieldCheck,
+  Sparkles,
   Star,
+  Sun,
   Trash2,
   Video,
   X,
@@ -36,8 +41,18 @@ import type {
   RelationshipGoal,
   SwipeHistoryEntry,
   SwipeStats,
+  ThemeMode,
 } from '../types';
 import { PWAInstallControl, SafeImage, VerifiedBadge } from './CommonUI';
+import { InterestBadges } from './InterestBadges';
+
+interface ThemeControlsProps {
+  themeMode: ThemeMode;
+  isDark: boolean;
+  systemPrefersDark: boolean;
+  onSetThemeMode: (mode: ThemeMode) => void;
+  onToggleDarkMode: () => void;
+}
 
 interface PushControlsProps {
   isSubscribed: boolean;
@@ -59,10 +74,13 @@ interface MyProfileViewProps {
   matchesCount: number;
   blockedUsers: BlockedUserRecord[];
   profileMap: Record<string, DatingProfile>;
+  matchingCountsByInterest: Record<string, number>;
+  themeControls: ThemeControlsProps;
   pushControls: PushControlsProps;
   onSaveProfile: (updates: Partial<CurrentUser>) => Promise<boolean>;
   onUnblockUser: (profileId: string) => Promise<void>;
   onSelectHistoryProfile: (profile: DatingProfile) => void;
+  onSelectInterest: (interest: string) => void;
   onOpenVideoIntroModal: () => void;
   onDeleteVideoIntro: () => Promise<boolean>;
   onOpenVerificationModal: () => void;
@@ -112,10 +130,13 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
   matchesCount,
   blockedUsers,
   profileMap,
+  matchingCountsByInterest,
+  themeControls,
   pushControls,
   onSaveProfile,
   onUnblockUser,
   onSelectHistoryProfile,
+  onSelectInterest,
   onOpenVideoIntroModal,
   onDeleteVideoIntro,
   onOpenVerificationModal,
@@ -293,6 +314,7 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
     videoIntroDurationSec: currentUser.videoIntroDurationSec,
     videoIntroPrompt: currentUser.videoIntroPrompt,
     icebreakers: ['Hei!', 'Hvordan går det?', 'Lyst til å ta en kaffe?'],
+    readReceiptsEnabled: currentUser.readReceiptsEnabled,
     isCurrentUserPreview: true,
   };
 
@@ -311,70 +333,110 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
     <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-8">
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 mb-6">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-900">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
             Min profil og preferanser
           </h1>
-          <p className="text-sm text-zinc-500 mt-1">
-            Rediger din offentlige profil, administrer push-varsler og se innsikt i egne sveipevalg
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+            Rediger din offentlige profil, tilpass lys eller mørk modus og se innsikt i egne sveipevalg
           </p>
         </div>
 
         <button
           type="button"
           onClick={() => onPreviewPublicModal(publicProfileData)}
-          className="min-h-[44px] px-4 py-2 rounded-xl border border-zinc-200 bg-white text-sm font-semibold text-zinc-800 hover:bg-zinc-50 inline-flex items-center justify-center gap-2 transition whitespace-nowrap shrink-0"
+          className="min-h-[44px] px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm font-semibold text-zinc-800 dark:text-zinc-100 hover:bg-zinc-50 dark:hover:bg-zinc-800 inline-flex items-center justify-center gap-2 transition whitespace-nowrap shrink-0"
         >
-          <Eye className="w-4 h-4 text-zinc-600" />
+          <Eye className="w-4 h-4 text-zinc-600 dark:text-zinc-400" />
           <span>Se offentlig profil i fullskjerm</span>
         </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
-        {/* Left Column (7 cols): Swipe Statistics Module + Profile Editor Form */}
+        {/* Left Column (7 cols): Interactive Interest Badges + Swipe Statistics Module + Swipe History + Profile Editor Form */}
         <div className="lg:col-span-7 space-y-6">
+          {/* 0. INTERAKTIVE INTERESSE-MERKER MODUL */}
+          <div className="rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5 sm:p-7 shadow-xs space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-2.5">
+                <Sparkles className="w-5 h-5 mt-0.5 text-rose-600 dark:text-rose-400 shrink-0" />
+                <div>
+                  <h2 className="text-base sm:text-lg font-bold text-zinc-900 dark:text-zinc-50">
+                    Mine interesse-merker
+                  </h2>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed">
+                    Merker lyser opp når du har felles interesser med andre brukere — trykk på et merke for å se hvem som deler interessen.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {currentUser.interests.length > 0 ? (
+              <div className="pt-1">
+                <InterestBadges
+                  interests={currentUser.interests}
+                  viewerInterests={currentUser.interests}
+                  isOwnProfile
+                  matchingCountsByInterest={matchingCountsByInterest}
+                  onSelectInterest={onSelectInterest}
+                  showHeader={false}
+                />
+              </div>
+            ) : (
+              <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 pt-1">
+                Du har ikke valgt noen interesser ennå. Legg til interesser i skjemaet nedenfor for å aktivere interesse-merker.
+              </p>
+            )}
+          </div>
+
           {/* 1. SVEIPE-STATISTIKK MODUL */}
-          <div className="rounded-3xl bg-white border border-zinc-200 p-5 sm:p-7 shadow-xs">
+          <div className="rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5 sm:p-7 shadow-xs">
             <div className="flex items-center justify-between gap-3 mb-4">
               <div className="flex items-center gap-2.5">
-                <BarChart3 className="w-5 h-5 text-rose-600 shrink-0" />
-                <h2 className="text-base sm:text-lg font-bold text-zinc-900">
+                <BarChart3 className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0" />
+                <h2 className="text-base sm:text-lg font-bold text-zinc-900 dark:text-zinc-50">
                   Sveipe-statistikk
                 </h2>
               </div>
-              <span className="text-xs font-medium text-zinc-500 tabular-nums">
+              <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400 tabular-nums">
                 {totalSwipes} vurderte profiler
               </span>
             </div>
 
-            <div className="grid grid-cols-3 gap-4 py-3 border-y border-zinc-100">
+            <div className="grid grid-cols-3 gap-4 py-3 border-y border-zinc-100 dark:border-zinc-800">
               <div>
-                <p className="text-xs text-zinc-500">Høyre (Likt)</p>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Høyre (Likt)
+                </p>
                 <div className="mt-1 flex items-baseline gap-1.5">
-                  <span className="text-2xl font-bold text-rose-600 tabular-nums">
+                  <span className="text-2xl font-bold text-rose-600 dark:text-rose-400 tabular-nums">
                     {rightPercent}%
                   </span>
-                  <span className="text-xs text-zinc-400 tabular-nums">
+                  <span className="text-xs text-zinc-400 dark:text-zinc-500 tabular-nums">
                     ({swipeStats.rightCount})
                   </span>
                 </div>
               </div>
 
               <div>
-                <p className="text-xs text-zinc-500">Venstre (Avvist)</p>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Venstre (Avvist)
+                </p>
                 <div className="mt-1 flex items-baseline gap-1.5">
-                  <span className="text-2xl font-bold text-zinc-800 tabular-nums">
+                  <span className="text-2xl font-bold text-zinc-800 dark:text-zinc-200 tabular-nums">
                     {leftPercent}%
                   </span>
-                  <span className="text-xs text-zinc-400 tabular-nums">
+                  <span className="text-xs text-zinc-400 dark:text-zinc-500 tabular-nums">
                     ({swipeStats.leftCount})
                   </span>
                 </div>
               </div>
 
               <div>
-                <p className="text-xs text-zinc-500">Aktive matcher</p>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Aktive matcher
+                </p>
                 <div className="mt-1 flex items-baseline gap-1.5">
-                  <span className="text-2xl font-bold text-zinc-900 tabular-nums">
+                  <span className="text-2xl font-bold text-zinc-900 dark:text-zinc-50 tabular-nums">
                     {matchesCount}
                   </span>
                 </div>
@@ -383,7 +445,7 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
 
             <div className="mt-4">
               <div
-                className="h-3 w-full rounded-full bg-zinc-200 overflow-hidden flex"
+                className="h-3 w-full rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden flex"
                 role="img"
                 aria-label={`Sveipefordeling: ${rightPercent} prosent høyre og ${leftPercent} prosent venstre`}
               >
@@ -396,42 +458,42 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
                 />
               </div>
 
-              <div className="mt-2 flex items-center justify-between text-xs text-zinc-500">
+              <div className="mt-2 flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
                 <span className="inline-flex items-center gap-1.5">
                   <Heart
-                    className="w-3.5 h-3.5 text-rose-600"
+                    className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400"
                     fill="currentColor"
                   />
                   <span>Sveip høyre · {swipeStats.rightCount} profiler</span>
                 </span>
                 <span className="inline-flex items-center gap-1">
-                  <X className="w-3.5 h-3.5 text-zinc-500" />
+                  <X className="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400" />
                   <span>Sveip venstre · {swipeStats.leftCount} profiler</span>
                 </span>
               </div>
             </div>
 
-            <p className="mt-3.5 text-xs sm:text-sm text-zinc-600 leading-relaxed">
+            <p className="mt-3.5 text-xs sm:text-sm text-zinc-600 dark:text-zinc-300 leading-relaxed">
               {preferenceInsight}
             </p>
           </div>
 
           {/* 1B. SVEIPE-HISTORIKK MODUL (SISTE 10 SVEIP) */}
-          <div className="rounded-3xl bg-white border border-zinc-200 p-5 sm:p-7 shadow-xs">
+          <div className="rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5 sm:p-7 shadow-xs">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
               <div>
                 <div className="flex items-center gap-2.5">
-                  <History className="w-5 h-5 text-rose-600 shrink-0" />
-                  <h2 className="text-base sm:text-lg font-bold text-zinc-900">
+                  <History className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0" />
+                  <h2 className="text-base sm:text-lg font-bold text-zinc-900 dark:text-zinc-50">
                     Sveipe-historikk
                   </h2>
                 </div>
-                <p className="text-xs text-zinc-500 mt-1">
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
                   De siste 10 profilene du har sveipet på — åpne profilen på nytt ved eventuelle feilsveip
                 </p>
               </div>
 
-              <span className="text-xs font-medium text-zinc-500 tabular-nums shrink-0">
+              <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400 tabular-nums shrink-0">
                 {recentTenHistory.length} / 10 siste sveip
               </span>
             </div>
@@ -440,7 +502,7 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
             <div
               role="tablist"
               aria-label="Filtrer sveipehistorikk"
-              className="inline-flex items-center p-1 rounded-xl bg-zinc-100 mb-4"
+              className="inline-flex items-center p-1 rounded-xl bg-zinc-100 dark:bg-zinc-800 mb-4"
             >
               {[
                 { id: 'all' as const, label: `Alle (${recentTenHistory.length})` },
@@ -463,8 +525,8 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
                     onClick={() => setHistoryFilter(tab.id)}
                     className={`min-h-[36px] px-3 py-1 rounded-lg text-xs font-medium transition-colors whitespace-nowrap tabular-nums ${
                       active
-                        ? 'bg-white text-zinc-900 shadow-xs'
-                        : 'text-zinc-600 hover:text-zinc-900'
+                        ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50 shadow-xs'
+                        : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
                     }`}
                   >
                     {tab.label}
@@ -474,8 +536,8 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
             </div>
 
             {filteredHistory.length === 0 ? (
-              <div className="py-6 text-center border-t border-zinc-100">
-                <p className="text-sm text-zinc-600">
+              <div className="py-6 text-center border-t border-zinc-100 dark:border-zinc-800">
+                <p className="text-sm text-zinc-600 dark:text-zinc-400">
                   {recentTenHistory.length === 0
                     ? 'Du har ingen sveip i historikken ennå.'
                     : historyFilter === 'left'
@@ -484,7 +546,7 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
                 </p>
               </div>
             ) : (
-              <div className="divide-y divide-zinc-100 border-t border-zinc-100">
+              <div className="divide-y divide-zinc-100 dark:divide-zinc-800/80 border-t border-zinc-100 dark:border-zinc-800">
                 {filteredHistory.map((entry) => {
                   const profile = profileMap[entry.profileId];
                   if (!profile) return null;
@@ -500,7 +562,7 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
                         onClick={() => onSelectHistoryProfile(profile)}
                         className="flex items-center gap-3.5 min-w-0 text-left group flex-1"
                       >
-                        <div className="w-12 h-12 rounded-2xl overflow-hidden bg-zinc-100 shrink-0">
+                        <div className="w-12 h-12 rounded-2xl overflow-hidden bg-zinc-100 dark:bg-zinc-800 shrink-0">
                           <SafeImage
                             src={profile.image}
                             alt={profile.name}
@@ -510,19 +572,19 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
 
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5">
-                            <span className="text-sm font-bold text-zinc-900 group-hover:underline truncate">
+                            <span className="text-sm font-bold text-zinc-900 dark:text-zinc-50 group-hover:underline truncate">
                               {profile.name},{' '}
                               <span className="tabular-nums">{profile.age}</span>
                             </span>
                             {profile.verified && <VerifiedBadge size="sm" />}
                           </div>
 
-                          <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-zinc-500">
+                          <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-zinc-500 dark:text-zinc-400">
                             <span
                               className={
                                 isRight
-                                  ? 'text-rose-600 font-medium'
-                                  : 'text-zinc-600 font-medium'
+                                  ? 'text-rose-600 dark:text-rose-400 font-medium'
+                                  : 'text-zinc-600 dark:text-zinc-300 font-medium'
                               }
                             >
                               {isRight
@@ -542,9 +604,9 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
                       <button
                         type="button"
                         onClick={() => onSelectHistoryProfile(profile)}
-                        className="min-h-[40px] px-3.5 py-2 rounded-xl border border-zinc-200 bg-white text-xs font-semibold text-zinc-800 hover:bg-zinc-50 inline-flex items-center gap-1.5 transition whitespace-nowrap shrink-0"
+                        className="min-h-[40px] px-3.5 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-semibold text-zinc-800 dark:text-zinc-100 hover:bg-zinc-50 dark:hover:bg-zinc-700 inline-flex items-center gap-1.5 transition whitespace-nowrap shrink-0"
                       >
-                        <Eye className="w-3.5 h-3.5 text-zinc-500" />
+                        <Eye className="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400" />
                         <span>Se profil</span>
                       </button>
                     </div>
@@ -557,11 +619,13 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
           {/* 2. PROFILREDIGERINGSSKJEMA */}
           <form
             onSubmit={handleSubmit}
-            className="rounded-3xl bg-white border border-zinc-200 p-5 sm:p-7 shadow-xs space-y-6"
+            className="rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5 sm:p-7 shadow-xs space-y-6"
           >
-            <div className="pb-4 border-b border-zinc-100">
-              <h2 className="text-lg font-bold text-zinc-900">Rediger profil</h2>
-              <p className="text-xs text-zinc-500 mt-0.5">
+            <div className="pb-4 border-b border-zinc-100 dark:border-zinc-800">
+              <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-50">
+                Rediger profil
+              </h2>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
                 Oppdater navn, alder, bildegalleri og biografi — lagrede endringer vises umiddelbart på din offentlige profil
               </p>
             </div>
@@ -569,10 +633,10 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
             {/* Photo Gallery Manager */}
             <div>
               <div className="flex items-center justify-between mb-2.5">
-                <label className="text-xs font-semibold text-zinc-700">
+                <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
                   Mine profilbilder ({photos.length}/6)
                 </label>
-                <span className="text-xs text-zinc-400">
+                <span className="text-xs text-zinc-400 dark:text-zinc-500">
                   Første bilde er hovedbilde
                 </span>
               </div>
@@ -581,7 +645,7 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
                 {photos.map((photoSrc, idx) => (
                   <div
                     key={`${idx}-${photoSrc.slice(-18)}`}
-                    className="relative aspect-[3/4] rounded-2xl overflow-hidden bg-zinc-100 border border-zinc-200 group"
+                    className="relative aspect-[3/4] rounded-2xl overflow-hidden bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 group"
                   >
                     <SafeImage
                       src={photoSrc}
@@ -626,7 +690,7 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="aspect-[3/4] rounded-2xl border-2 border-dashed border-zinc-300 hover:border-rose-500 bg-zinc-50 hover:bg-rose-50/40 flex flex-col items-center justify-center gap-2 text-zinc-600 hover:text-rose-600 p-4 transition"
+                    className="aspect-[3/4] rounded-2xl border-2 border-dashed border-zinc-300 dark:border-zinc-700 hover:border-rose-500 dark:hover:border-rose-500 bg-zinc-50 dark:bg-zinc-800/50 hover:bg-rose-50/40 dark:hover:bg-rose-950/30 flex flex-col items-center justify-center gap-2 text-zinc-600 dark:text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 p-4 transition"
                   >
                     <ImagePlus className="w-6 h-6" />
                     <span className="text-xs font-semibold text-center">
@@ -651,7 +715,7 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
               <div className="sm:col-span-2">
                 <label
                   htmlFor="profile-name"
-                  className="block text-xs font-semibold text-zinc-700 mb-1.5"
+                  className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5"
                 >
                   Fornavn
                 </label>
@@ -665,14 +729,14 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
                     setName(e.target.value);
                     setSaveSuccess(false);
                   }}
-                  className="w-full min-h-[46px] px-3.5 rounded-xl border border-zinc-200 bg-zinc-50/60 text-sm text-zinc-900 focus:bg-white focus:outline-none focus:border-zinc-900"
+                  className="w-full min-h-[46px] px-3.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50/60 dark:bg-zinc-800/70 text-sm text-zinc-900 dark:text-zinc-100 focus:bg-white dark:focus:bg-zinc-800 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-300"
                 />
               </div>
 
               <div>
                 <label
                   htmlFor="profile-age"
-                  className="block text-xs font-semibold text-zinc-700 mb-1.5"
+                  className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5"
                 >
                   Alder
                 </label>
@@ -687,7 +751,7 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
                     setAge(Number(e.target.value));
                     setSaveSuccess(false);
                   }}
-                  className="w-full min-h-[46px] px-3.5 rounded-xl border border-zinc-200 bg-zinc-50/60 text-sm text-zinc-900 tabular-nums focus:bg-white focus:outline-none focus:border-zinc-900"
+                  className="w-full min-h-[46px] px-3.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50/60 dark:bg-zinc-800/70 text-sm text-zinc-900 dark:text-zinc-100 tabular-nums focus:bg-white dark:focus:bg-zinc-800 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-300"
                 />
               </div>
             </div>
@@ -697,7 +761,7 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
               <div>
                 <label
                   htmlFor="profile-city"
-                  className="block text-xs font-semibold text-zinc-700 mb-1.5"
+                  className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5"
                 >
                   By / Lokasjon
                 </label>
@@ -711,14 +775,14 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
                     setCity(e.target.value);
                     setSaveSuccess(false);
                   }}
-                  className="w-full min-h-[46px] px-3.5 rounded-xl border border-zinc-200 bg-zinc-50/60 text-sm text-zinc-900 focus:bg-white focus:outline-none focus:border-zinc-900"
+                  className="w-full min-h-[46px] px-3.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50/60 dark:bg-zinc-800/70 text-sm text-zinc-900 dark:text-zinc-100 focus:bg-white dark:focus:bg-zinc-800 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-300"
                 />
               </div>
 
               <div>
                 <label
                   htmlFor="profile-occupation"
-                  className="block text-xs font-semibold text-zinc-700 mb-1.5"
+                  className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5"
                 >
                   Yrke / Studier
                 </label>
@@ -731,7 +795,7 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
                     setOccupation(e.target.value);
                     setSaveSuccess(false);
                   }}
-                  className="w-full min-h-[46px] px-3.5 rounded-xl border border-zinc-200 bg-zinc-50/60 text-sm text-zinc-900 focus:bg-white focus:outline-none focus:border-zinc-900"
+                  className="w-full min-h-[46px] px-3.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50/60 dark:bg-zinc-800/70 text-sm text-zinc-900 dark:text-zinc-100 focus:bg-white dark:focus:bg-zinc-800 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-300"
                 />
               </div>
             </div>
@@ -741,7 +805,7 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
               <div>
                 <label
                   htmlFor="profile-education"
-                  className="block text-xs font-semibold text-zinc-700 mb-1.5"
+                  className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5"
                 >
                   Utdanningsnivå
                 </label>
@@ -752,7 +816,7 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
                     setEducation(e.target.value as EducationLevel);
                     setSaveSuccess(false);
                   }}
-                  className="w-full min-h-[46px] px-3.5 rounded-xl border border-zinc-200 bg-zinc-50/60 text-sm text-zinc-900 focus:bg-white focus:outline-none focus:border-zinc-900"
+                  className="w-full min-h-[46px] px-3.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50/60 dark:bg-zinc-800/70 text-sm text-zinc-900 dark:text-zinc-100 focus:bg-white dark:focus:bg-zinc-800 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-300"
                 >
                   {EDUCATION_OPTIONS.map((opt) => (
                     <option key={opt} value={opt}>
@@ -765,7 +829,7 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
               <div>
                 <label
                   htmlFor="profile-goal"
-                  className="block text-xs font-semibold text-zinc-700 mb-1.5"
+                  className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5"
                 >
                   Hva jeg ser etter
                 </label>
@@ -776,7 +840,7 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
                     setRelationshipGoal(e.target.value as RelationshipGoal);
                     setSaveSuccess(false);
                   }}
-                  className="w-full min-h-[46px] px-3.5 rounded-xl border border-zinc-200 bg-zinc-50/60 text-sm text-zinc-900 focus:bg-white focus:outline-none focus:border-zinc-900"
+                  className="w-full min-h-[46px] px-3.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50/60 dark:bg-zinc-800/70 text-sm text-zinc-900 dark:text-zinc-100 focus:bg-white dark:focus:bg-zinc-800 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-300"
                 >
                   {RELATIONSHIP_GOAL_OPTIONS.map((opt) => (
                     <option key={opt} value={opt}>
@@ -792,11 +856,11 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
               <div className="flex items-center justify-between mb-1.5">
                 <label
                   htmlFor="profile-bio"
-                  className="text-xs font-semibold text-zinc-700"
+                  className="text-xs font-semibold text-zinc-700 dark:text-zinc-300"
                 >
                   Biografi
                 </label>
-                <span className="text-xs text-zinc-400 tabular-nums">
+                <span className="text-xs text-zinc-400 dark:text-zinc-500 tabular-nums">
                   {bio.length}/400
                 </span>
               </div>
@@ -810,13 +874,13 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
                   setSaveSuccess(false);
                 }}
                 placeholder="Fortell litt om hva du liker å bruke dagene på..."
-                className="w-full p-3.5 rounded-xl border border-zinc-200 bg-zinc-50/60 text-sm text-zinc-900 leading-relaxed focus:bg-white focus:outline-none focus:border-zinc-900"
+                className="w-full p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50/60 dark:bg-zinc-800/70 text-sm text-zinc-900 dark:text-zinc-100 leading-relaxed focus:bg-white dark:focus:bg-zinc-800 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-300"
               />
             </div>
 
             {/* Interests Picker */}
             <div>
-              <label className="block text-xs font-semibold text-zinc-700 mb-2">
+              <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-2">
                 Mine interesser
               </label>
               <div className="flex flex-wrap gap-2 mb-3">
@@ -830,8 +894,8 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
                       aria-pressed={active}
                       className={`min-h-[38px] px-3.5 py-1.5 rounded-xl text-xs font-medium inline-flex items-center gap-1.5 transition whitespace-nowrap ${
                         active
-                          ? 'bg-zinc-900 text-white'
-                          : 'border border-zinc-200 bg-zinc-50 text-zinc-700 hover:bg-zinc-100'
+                          ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900'
+                          : 'border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/60 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'
                       }`}
                     >
                       {active && <Check className="w-3.5 h-3.5" />}
@@ -854,13 +918,13 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
                     }
                   }}
                   placeholder="Legg til egen interesse..."
-                  className="flex-1 min-h-[42px] px-3.5 rounded-xl border border-zinc-200 bg-zinc-50/60 text-xs sm:text-sm text-zinc-900 focus:bg-white focus:outline-none focus:border-zinc-900"
+                  className="flex-1 min-h-[42px] px-3.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50/60 dark:bg-zinc-800/70 text-xs sm:text-sm text-zinc-900 dark:text-zinc-100 focus:bg-white dark:focus:bg-zinc-800 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-300"
                 />
                 <button
                   type="button"
                   onClick={handleAddCustomInterest}
                   disabled={!customInterest.trim()}
-                  className="min-h-[42px] px-3.5 rounded-xl border border-zinc-200 text-xs font-semibold text-zinc-800 hover:bg-zinc-50 disabled:opacity-40 inline-flex items-center gap-1 transition whitespace-nowrap"
+                  className="min-h-[42px] px-3.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-xs font-semibold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 inline-flex items-center gap-1 transition whitespace-nowrap"
                 >
                   <Plus className="w-4 h-4" />
                   <span>Legg til</span>
@@ -869,13 +933,13 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
             </div>
 
             {/* Save Button + Confirmation */}
-            <div className="pt-4 border-t border-zinc-100 space-y-3">
+            <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800 space-y-3">
               {saveSuccess && (
                 <div
                   role="status"
-                  className="rounded-2xl bg-emerald-50 border border-emerald-200 px-4 py-3 flex items-center gap-2.5 text-xs sm:text-sm font-medium text-emerald-900"
+                  className="rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 px-4 py-3 flex items-center gap-2.5 text-xs sm:text-sm font-medium text-emerald-900 dark:text-emerald-200"
                 >
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                   <span>
                     Endringene er lagret og vises nå på din offentlige profil!
                   </span>
@@ -893,24 +957,174 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
           </form>
         </div>
 
-        {/* Right Column (5 cols): Live Public Profile Card + Web Push API + Verification + PWA */}
+        {/* Right Column (5 cols): Theme Settings + Live Public Profile Card + Video Intro + Web Push + Verification + Blocked + PWA */}
         <aside className="lg:col-span-5 space-y-6">
+          {/* UTSEENDE OG MØRK MODUS (PROFILE SETTINGS CARD) */}
+          <div className="rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5 sm:p-6 shadow-xs space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-start gap-3">
+                {themeControls.isDark ? (
+                  <Moon className="w-5 h-5 mt-0.5 text-rose-500 shrink-0" />
+                ) : (
+                  <Sun className="w-5 h-5 mt-0.5 text-amber-500 shrink-0" />
+                )}
+                <div>
+                  <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-50">
+                    Utseende og mørk modus
+                  </h3>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed">
+                    Bytt automatisk etter systeminnstillinger eller bruk bryteren for manuell visning.
+                  </p>
+                </div>
+              </div>
+
+              {/* Manual Dark Mode Toggle Switch */}
+              <button
+                type="button"
+                role="switch"
+                aria-checked={themeControls.isDark}
+                aria-label="Slå mørk modus av eller på"
+                onClick={themeControls.onToggleDarkMode}
+                className="min-h-[44px] min-w-[56px] flex items-center justify-end shrink-0"
+              >
+                <span
+                  className={`w-12 h-7 rounded-full p-1 transition-colors flex items-center ${
+                    themeControls.isDark
+                      ? 'bg-rose-600 justify-end'
+                      : 'bg-zinc-200 dark:bg-zinc-700 justify-start'
+                  }`}
+                >
+                  <motion.span
+                    layout
+                    transition={{ type: 'spring', stiffness: 500, damping: 34 }}
+                    className="w-5 h-5 rounded-full bg-white shadow-xs block"
+                  />
+                </span>
+              </button>
+            </div>
+
+            {/* 3-Way Segmented Mode Selector: System / Lys / Mørk */}
+            <div
+              role="radiogroup"
+              aria-label="Velg temamodus"
+              className="grid grid-cols-3 gap-1.5 p-1 rounded-2xl bg-zinc-100 dark:bg-zinc-800"
+            >
+              {(
+                [
+                  { id: 'system', label: 'System', icon: Monitor },
+                  { id: 'light', label: 'Lys', icon: Sun },
+                  { id: 'dark', label: 'Mørk', icon: Moon },
+                ] as const
+              ).map((opt) => {
+                const Icon = opt.icon;
+                const active = themeControls.themeMode === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    onClick={() => themeControls.onSetThemeMode(opt.id)}
+                    className={`min-h-[40px] px-3 py-1.5 rounded-xl text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition whitespace-nowrap ${
+                      active
+                        ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50 shadow-xs'
+                        : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
+                    }`}
+                  >
+                    <Icon className="w-3.5 h-3.5 shrink-0" />
+                    <span>{opt.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              {themeControls.themeMode === 'system'
+                ? `Følger systeminnstillinger automatisk (${
+                    themeControls.systemPrefersDark
+                      ? 'mørk bakgrunn aktiv'
+                      : 'lys bakgrunn aktiv'
+                  }).`
+                : themeControls.themeMode === 'dark'
+                  ? 'Manuell mørk modus er aktivert på tvers av hele appen.'
+                  : 'Manuell lys modus er aktivert på tvers av hele appen.'}
+            </p>
+          </div>
+
+          {/* MELDINGER OG LESEBEKREFTELSER (PRIVACY SETTING) */}
+          <div className="rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5 sm:p-6 shadow-xs space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <CheckCheck
+                  className={`w-5 h-5 mt-0.5 shrink-0 ${
+                    currentUser.readReceiptsEnabled !== false
+                      ? 'text-sky-600 dark:text-sky-400'
+                      : 'text-zinc-400 dark:text-zinc-500'
+                  }`}
+                />
+                <div>
+                  <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-50">
+                    Lesebekreftelser i meldinger
+                  </h3>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed">
+                    La matcher se når du har åpnet meldingene deres, og se når de har åpnet dine.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                role="switch"
+                aria-checked={currentUser.readReceiptsEnabled !== false}
+                aria-label="Slå lesebekreftelser av eller på"
+                onClick={() => {
+                  void onSaveProfile({
+                    readReceiptsEnabled: !(
+                      currentUser.readReceiptsEnabled !== false
+                    ),
+                  });
+                }}
+                className="min-h-[44px] min-w-[56px] flex items-center justify-end shrink-0"
+              >
+                <span
+                  className={`w-12 h-7 rounded-full p-1 transition-colors flex items-center ${
+                    currentUser.readReceiptsEnabled !== false
+                      ? 'bg-sky-600 justify-end'
+                      : 'bg-zinc-200 dark:bg-zinc-700 justify-start'
+                  }`}
+                >
+                  <motion.span
+                    layout
+                    transition={{ type: 'spring', stiffness: 500, damping: 34 }}
+                    className="w-5 h-5 rounded-full bg-white shadow-xs block"
+                  />
+                </span>
+              </button>
+            </div>
+
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+              {currentUser.readReceiptsEnabled !== false
+                ? 'Aktivert — du ser dobbel hake og «Lest» på meldinger når mottakeren heller ikke har deaktivert dette.'
+                : 'Deaktivert — lesebekreftelser deles og vises ikke i meldingsvisningen.'}
+            </p>
+          </div>
+
           {/* PUBLIC PROFILE CARD */}
-          <div className="rounded-3xl bg-white border border-zinc-200 overflow-hidden shadow-xs">
-            <div className="px-5 py-3.5 border-b border-zinc-100 flex items-center justify-between gap-2">
-              <span className="text-xs font-semibold text-zinc-500">
+          <div className="rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-xs">
+            <div className="px-5 py-3.5 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between gap-2">
+              <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
                 Din offentlige profil (lagret visning)
               </span>
 
               {currentUser.videoIntroUrl ? (
-                <div className="inline-flex items-center p-0.5 rounded-lg bg-zinc-100">
+                <div className="inline-flex items-center p-0.5 rounded-lg bg-zinc-100 dark:bg-zinc-800">
                   <button
                     type="button"
                     onClick={() => setPublicPreviewTab('photos')}
                     className={`min-h-[30px] px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
                       publicPreviewTab === 'photos'
-                        ? 'bg-white text-zinc-900 shadow-xs'
-                        : 'text-zinc-600 hover:text-zinc-900'
+                        ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50 shadow-xs'
+                        : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
                     }`}
                   >
                     Bilder
@@ -920,8 +1134,8 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
                     onClick={() => setPublicPreviewTab('video')}
                     className={`min-h-[30px] px-2.5 py-1 rounded-md text-xs font-medium inline-flex items-center gap-1 transition-colors ${
                       publicPreviewTab === 'video'
-                        ? 'bg-white text-rose-600 shadow-xs'
-                        : 'text-zinc-600 hover:text-zinc-900'
+                        ? 'bg-white dark:bg-zinc-900 text-rose-600 dark:text-rose-400 shadow-xs'
+                        : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
                     }`}
                   >
                     <Video className="w-3 h-3" />
@@ -932,7 +1146,7 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
                 </div>
               ) : (
                 publicPhotos.length > 1 && (
-                  <span className="text-xs text-zinc-400 tabular-nums">
+                  <span className="text-xs text-zinc-400 dark:text-zinc-500 tabular-nums">
                     Bilde {previewPhotoIdx + 1} av {publicPhotos.length}
                   </span>
                 )
@@ -949,7 +1163,7 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
                 />
               </div>
             ) : (
-              <div className="relative aspect-[3/4] bg-zinc-100">
+              <div className="relative aspect-[3/4] bg-zinc-100 dark:bg-zinc-800">
                 <SafeImage
                   src={activePublicPhoto}
                   alt={`${currentUser.name}, ${currentUser.age} år`}
@@ -1027,46 +1241,46 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
             )}
 
             <div className="p-5 space-y-4">
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-zinc-500 pb-3 border-b border-zinc-100">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400 pb-3 border-b border-zinc-100 dark:border-zinc-800">
                 <span>{currentUser.education}</span>
                 <span aria-hidden="true">·</span>
                 <span>{currentUser.relationshipGoal}</span>
               </div>
 
-              <p className="text-sm text-zinc-700 leading-relaxed">
+              <p className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed">
                 {currentUser.bio || 'Ingen biografi lagret ennå.'}
               </p>
 
               {currentUser.interests.length > 0 && (
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-zinc-500 pt-2 border-t border-zinc-100">
-                  {currentUser.interests.map((item, idx) => (
-                    <React.Fragment key={item}>
-                      {idx > 0 && (
-                        <span aria-hidden="true" className="text-zinc-300">
-                          ·
-                        </span>
-                      )}
-                      <span>{item}</span>
-                    </React.Fragment>
-                  ))}
+                <div className="pt-3 border-t border-zinc-100 dark:border-zinc-800">
+                  <InterestBadges
+                    interests={currentUser.interests}
+                    viewerInterests={currentUser.interests}
+                    isOwnProfile
+                    matchingCountsByInterest={matchingCountsByInterest}
+                    onSelectInterest={onSelectInterest}
+                    compact
+                  />
                 </div>
               )}
             </div>
           </div>
 
           {/* 15-SECOND VIDEO INTRODUCTION STUDIO CARD */}
-          <div className="rounded-3xl bg-white border border-zinc-200 p-5 sm:p-6 shadow-xs space-y-4">
+          <div className="rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5 sm:p-6 shadow-xs space-y-4">
             <div className="flex items-start gap-3">
               <Video
                 className={`w-5 h-5 mt-0.5 shrink-0 ${
-                  currentUser.videoIntroUrl ? 'text-rose-600' : 'text-zinc-500'
+                  currentUser.videoIntroUrl
+                    ? 'text-rose-600 dark:text-rose-400'
+                    : 'text-zinc-500 dark:text-zinc-400'
                 }`}
               />
               <div>
-                <h3 className="text-sm font-bold text-zinc-900">
+                <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-50">
                   15-sekunders video-introduksjon
                 </h3>
-                <p className="text-xs text-zinc-500 mt-1 leading-relaxed">
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 leading-relaxed">
                   Spill inn en kort video med kamera og mikrofon slik at andre kan høre stemmen din og bli raskere kjent med deg.
                 </p>
               </div>
@@ -1083,7 +1297,7 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
                     className="w-full h-full object-cover"
                   />
                 </div>
-                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-500">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-500 dark:text-zinc-400">
                   <span className="tabular-nums">
                     Lengde: {currentUser.videoIntroDurationSec || 15} sek
                     {currentUser.videoIntroUpdatedAt
@@ -1105,7 +1319,7 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
                 onClick={onOpenVideoIntroModal}
                 className={`flex-1 min-h-[46px] px-4 py-2.5 rounded-xl text-sm font-semibold inline-flex items-center justify-center gap-2 transition whitespace-nowrap ${
                   currentUser.videoIntroUrl
-                    ? 'border border-zinc-200 bg-zinc-50 text-zinc-800 hover:bg-zinc-100'
+                    ? 'border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-700'
                     : 'bg-rose-600 text-white hover:bg-rose-700'
                 }`}
               >
@@ -1124,7 +1338,7 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
                     setPublicPreviewTab('photos');
                     void onDeleteVideoIntro();
                   }}
-                  className="min-h-[46px] px-3.5 py-2.5 rounded-xl border border-zinc-200 text-xs font-semibold text-zinc-600 hover:border-red-200 hover:bg-red-50 hover:text-red-700 inline-flex items-center justify-center gap-1.5 transition whitespace-nowrap"
+                  className="min-h-[46px] px-3.5 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-xs font-semibold text-zinc-600 dark:text-zinc-300 hover:border-red-200 dark:hover:border-red-900 hover:bg-red-50 dark:hover:bg-red-950/50 hover:text-red-700 dark:hover:text-red-300 inline-flex items-center justify-center gap-1.5 transition whitespace-nowrap"
                   aria-label="Fjern video-introduksjon"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -1135,21 +1349,21 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
           </div>
 
           {/* WEB PUSH API NOTIFICATIONS CARD */}
-          <div className="rounded-3xl bg-white border border-zinc-200 p-5 sm:p-6 shadow-xs space-y-4">
+          <div className="rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5 sm:p-6 shadow-xs space-y-4">
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-start gap-3">
                 <Bell
                   className={`w-5 h-5 mt-0.5 shrink-0 ${
                     pushControls.isSubscribed || pushControls.inAppFallbackActive
-                      ? 'text-rose-600'
-                      : 'text-zinc-400'
+                      ? 'text-rose-600 dark:text-rose-400'
+                      : 'text-zinc-400 dark:text-zinc-500'
                   }`}
                 />
                 <div>
-                  <h3 className="text-sm font-bold text-zinc-900">
+                  <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-50">
                     Push-varsler (Web Push API)
                   </h3>
-                  <p className="text-xs text-zinc-500 mt-0.5 leading-relaxed">
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed">
                     Få varsel på Android og i nettleseren så snart du får en ny
                     match eller direktemelding.
                   </p>
@@ -1158,7 +1372,7 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
             </div>
 
             {pushControls.statusNote && (
-              <p className="text-xs text-zinc-600 bg-zinc-50 border border-zinc-200/80 rounded-xl p-3 leading-relaxed">
+              <p className="text-xs text-zinc-600 dark:text-zinc-300 bg-zinc-50 dark:bg-zinc-800/70 border border-zinc-200/80 dark:border-zinc-700 rounded-xl p-3 leading-relaxed">
                 {pushControls.statusNote}
               </p>
             )}
@@ -1166,7 +1380,7 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
             {/* Channel Preferences */}
             <div className="space-y-2.5 pt-1">
               <label className="flex items-center justify-between min-h-[40px] cursor-pointer select-none">
-                <span className="text-sm text-zinc-800">
+                <span className="text-sm text-zinc-800 dark:text-zinc-200">
                   Varsle ved nye matcher
                 </span>
                 <input
@@ -1183,7 +1397,7 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
               </label>
 
               <label className="flex items-center justify-between min-h-[40px] cursor-pointer select-none">
-                <span className="text-sm text-zinc-800">
+                <span className="text-sm text-zinc-800 dark:text-zinc-200">
                   Varsle ved nye meldinger
                 </span>
                 <input
@@ -1200,13 +1414,13 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
               </label>
             </div>
 
-            <div className="space-y-2 pt-2 border-t border-zinc-100">
+            <div className="space-y-2 pt-2 border-t border-zinc-100 dark:border-zinc-800">
               {pushControls.isSubscribed ? (
                 <button
                   type="button"
                   disabled={pushControls.busy}
                   onClick={pushControls.onUnsubscribe}
-                  className="w-full min-h-[46px] px-4 py-2.5 rounded-xl border border-zinc-200 bg-zinc-50 text-zinc-800 text-sm font-semibold hover:bg-zinc-100 inline-flex items-center justify-center gap-2 transition whitespace-nowrap"
+                  className="w-full min-h-[46px] px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-100 text-sm font-semibold hover:bg-zinc-100 dark:hover:bg-zinc-700 inline-flex items-center justify-center gap-2 transition whitespace-nowrap"
                 >
                   <BellOff className="w-4 h-4" />
                   <span>Deaktiver Web Push-abonnement</span>
@@ -1216,7 +1430,7 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
                   type="button"
                   disabled={pushControls.busy}
                   onClick={pushControls.onSubscribe}
-                  className="w-full min-h-[46px] px-4 py-2.5 rounded-xl bg-zinc-900 text-white text-sm font-semibold hover:bg-zinc-800 inline-flex items-center justify-center gap-2 transition whitespace-nowrap"
+                  className="w-full min-h-[46px] px-4 py-2.5 rounded-xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-sm font-semibold hover:bg-zinc-800 dark:hover:bg-white inline-flex items-center justify-center gap-2 transition whitespace-nowrap"
                 >
                   <Bell className="w-4 h-4" />
                   <span>
@@ -1233,9 +1447,9 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
                   type="button"
                   disabled={pushControls.busy}
                   onClick={() => pushControls.onSendTestPush('match')}
-                  className="min-h-[42px] px-3 py-2 rounded-xl border border-zinc-200 text-xs font-medium text-zinc-700 hover:bg-zinc-50 inline-flex items-center justify-center gap-1.5 transition whitespace-nowrap"
+                  className="min-h-[42px] px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 inline-flex items-center justify-center gap-1.5 transition whitespace-nowrap"
                 >
-                  <Heart className="w-3.5 h-3.5 text-rose-600" />
+                  <Heart className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
                   <span>Test match-push</span>
                 </button>
 
@@ -1243,9 +1457,9 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
                   type="button"
                   disabled={pushControls.busy}
                   onClick={() => pushControls.onSendTestPush('message')}
-                  className="min-h-[42px] px-3 py-2 rounded-xl border border-zinc-200 text-xs font-medium text-zinc-700 hover:bg-zinc-50 inline-flex items-center justify-center gap-1.5 transition whitespace-nowrap"
+                  className="min-h-[42px] px-3 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 inline-flex items-center justify-center gap-1.5 transition whitespace-nowrap"
                 >
-                  <Send className="w-3.5 h-3.5 text-zinc-700" />
+                  <Send className="w-3.5 h-3.5 text-zinc-700 dark:text-zinc-300" />
                   <span>Test meldings-push</span>
                 </button>
               </div>
@@ -1253,20 +1467,22 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
           </div>
 
           {/* Selfie Verification Status Card */}
-          <div className="rounded-3xl bg-white border border-zinc-200 p-5 sm:p-6 shadow-xs space-y-3.5">
+          <div className="rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5 sm:p-6 shadow-xs space-y-3.5">
             <div className="flex items-start gap-3">
               <ShieldCheck
                 className={`w-5 h-5 mt-0.5 shrink-0 ${
-                  currentUser.verified ? 'text-sky-600' : 'text-zinc-500'
+                  currentUser.verified
+                    ? 'text-sky-600 dark:text-sky-400'
+                    : 'text-zinc-500 dark:text-zinc-400'
                 }`}
               />
               <div>
-                <h3 className="text-sm font-bold text-zinc-900">
+                <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-50">
                   {currentUser.verified
                     ? 'Profilen din er selfie-verifisert'
                     : 'Bekreft profilen din med pose-selfie'}
                 </h3>
-                <p className="text-xs text-zinc-500 mt-1 leading-relaxed">
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 leading-relaxed">
                   {currentUser.verified
                     ? `Det blå verifiseringsmerket er aktivt på profilen din (${currentUser.verificationPose}).`
                     : 'Ta en rask selfie som matcher en gitt pose for å få et offisielt blått verifiseringsmerke.'}
@@ -1279,7 +1495,7 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
               onClick={onOpenVerificationModal}
               className={`w-full min-h-[46px] px-4 py-2.5 rounded-xl text-sm font-semibold transition whitespace-nowrap ${
                 currentUser.verified
-                  ? 'border border-zinc-200 bg-zinc-50 text-zinc-800 hover:bg-zinc-100'
+                  ? 'border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-700'
                   : 'bg-sky-600 text-white hover:bg-sky-700'
               }`}
             >
@@ -1290,15 +1506,15 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
           </div>
 
           {/* Blocked Users Management Card */}
-          <div className="rounded-3xl bg-white border border-zinc-200 p-5 sm:p-6 shadow-xs space-y-3.5">
+          <div className="rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5 sm:p-6 shadow-xs space-y-3.5">
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-start gap-3">
-                <Ban className="w-5 h-5 mt-0.5 text-zinc-500 shrink-0" />
+                <Ban className="w-5 h-5 mt-0.5 text-zinc-500 dark:text-zinc-400 shrink-0" />
                 <div>
-                  <h3 className="text-sm font-bold text-zinc-900">
+                  <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-50">
                     Blokkerte brukere ({blockedUsers.length})
                   </h3>
-                  <p className="text-xs text-zinc-500 mt-0.5 leading-relaxed">
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed">
                     Blokkerte profiler er skjult fra matche-lister, meldinger og søk.
                   </p>
                 </div>
@@ -1306,11 +1522,11 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
             </div>
 
             {blockedUsers.length === 0 ? (
-              <p className="text-xs text-zinc-500 pt-1">
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 pt-1">
                 Du har ikke blokkert noen brukere.
               </p>
             ) : (
-              <div className="divide-y divide-zinc-100 border-t border-zinc-100 pt-1">
+              <div className="divide-y divide-zinc-100 dark:divide-zinc-800/80 border-t border-zinc-100 dark:border-zinc-800 pt-1">
                 {blockedUsers.map((entry) => {
                   const p = profileMap[entry.profileId];
                   const displayName = p ? `${p.name}, ${p.age}` : entry.profileId;
@@ -1321,7 +1537,7 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         {p && (
-                          <div className="w-9 h-9 rounded-full overflow-hidden bg-zinc-100 shrink-0">
+                          <div className="w-9 h-9 rounded-full overflow-hidden bg-zinc-100 dark:bg-zinc-800 shrink-0">
                             <SafeImage
                               src={p.image}
                               alt={p.name}
@@ -1330,10 +1546,10 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
                           </div>
                         )}
                         <div className="min-w-0">
-                          <p className="text-sm font-semibold text-zinc-900 truncate">
+                          <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">
                             {displayName}
                           </p>
-                          <p className="text-[11px] text-zinc-500 truncate">
+                          <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
                             {entry.reason} · {entry.blockedAt}
                           </p>
                         </div>
@@ -1342,7 +1558,7 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
                       <button
                         type="button"
                         onClick={() => onUnblockUser(entry.profileId)}
-                        className="min-h-[38px] px-3 py-1.5 rounded-xl border border-zinc-200 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 transition whitespace-nowrap shrink-0"
+                        className="min-h-[38px] px-3 py-1.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition whitespace-nowrap shrink-0"
                       >
                         Opphev
                       </button>
@@ -1354,11 +1570,11 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
           </div>
 
           {/* PWA Home Screen Card */}
-          <div className="rounded-3xl bg-white border border-zinc-200 p-5 sm:p-6 shadow-xs space-y-2.5">
-            <h3 className="text-sm font-bold text-zinc-900">
+          <div className="rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5 sm:p-6 shadow-xs space-y-2.5">
+            <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-50">
               Gnist på hjemskjermen (PWA)
             </h3>
-            <p className="text-xs text-zinc-500 leading-relaxed">
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
               Installer web-appen direkte på Android eller iOS for rask tilgang i fullskjerm.
             </p>
             <PWAInstallControl />

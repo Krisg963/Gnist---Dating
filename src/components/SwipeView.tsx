@@ -5,6 +5,7 @@ import {
   MapPin,
   RotateCcw,
   ShieldCheck,
+  Sparkles,
   X,
 } from 'lucide-react';
 import {
@@ -17,14 +18,18 @@ import {
 import type { Variants } from 'framer-motion';
 import type { DatingProfile } from '../types';
 import { SafeImage, VerifiedBadge } from './CommonUI';
+import { InterestBadges, normalizeInterestKey } from './InterestBadges';
 
 interface SwipeViewProps {
   deckProfiles: DatingProfile[];
   canRewind: boolean;
   likesYouCount: number;
+  viewerInterests: string[];
+  matchingCountsByInterest?: Record<string, number>;
   onSwipe: (profileId: string, direction: 'left' | 'right') => void;
   onRewind: () => void;
   onSelectProfile: (profile: DatingProfile) => void;
+  onSelectInterest: (interest: string) => void;
   onGoToLikes: () => void;
   onGoToDiscover: () => void;
 }
@@ -65,6 +70,7 @@ const SwipeCard: React.FC<{
   isTop: boolean;
   exitDirection: 'left' | 'right' | null;
   reducedMotion: boolean;
+  sharedInterestCount: number;
   onCommitSwipe: (direction: 'left' | 'right') => void;
   onOpenDetails: () => void;
 }> = ({
@@ -72,6 +78,7 @@ const SwipeCard: React.FC<{
   isTop,
   exitDirection,
   reducedMotion,
+  sharedInterestCount,
   onCommitSwipe,
   onOpenDetails,
 }) => {
@@ -90,7 +97,7 @@ const SwipeCard: React.FC<{
         initial={{ opacity: 0, scale: 0.93, y: 16 }}
         animate={{ opacity: 0.86, scale: 0.96, y: 10 }}
         transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-        className="absolute inset-0 rounded-3xl overflow-hidden bg-zinc-200 pointer-events-none border border-zinc-200"
+        className="absolute inset-0 rounded-3xl overflow-hidden bg-zinc-200 dark:bg-zinc-800 pointer-events-none border border-zinc-200 dark:border-zinc-800"
       >
         <SafeImage
           src={profile.image}
@@ -121,7 +128,7 @@ const SwipeCard: React.FC<{
           onCommitSwipe('left');
         }
       }}
-      className="absolute inset-0 rounded-3xl overflow-hidden bg-zinc-100 shadow-lg border border-zinc-200 cursor-grab active:cursor-grabbing touch-pan-y select-none"
+      className="absolute inset-0 rounded-3xl overflow-hidden bg-zinc-100 dark:bg-zinc-900 shadow-lg border border-zinc-200 dark:border-zinc-800 cursor-grab active:cursor-grabbing touch-pan-y select-none"
     >
       <SafeImage
         src={profile.image}
@@ -167,7 +174,17 @@ const SwipeCard: React.FC<{
               </span>
             </div>
 
-            <p className="mt-2.5 text-sm text-white/85 line-clamp-2 leading-relaxed">
+            {sharedInterestCount > 0 && (
+              <div className="mt-1.5 inline-flex items-center gap-1.5 text-xs font-semibold text-rose-200">
+                <Sparkles className="w-3.5 h-3.5 text-rose-300 shrink-0" />
+                <span>
+                  {sharedInterestCount} felles{' '}
+                  {sharedInterestCount === 1 ? 'interesse' : 'interesser'}
+                </span>
+              </div>
+            )}
+
+            <p className="mt-2 text-sm text-white/85 line-clamp-2 leading-relaxed">
               {profile.bio}
             </p>
           </div>
@@ -193,9 +210,12 @@ export const SwipeView: React.FC<SwipeViewProps> = ({
   deckProfiles,
   canRewind,
   likesYouCount,
+  viewerInterests,
+  matchingCountsByInterest,
   onSwipe,
   onRewind,
   onSelectProfile,
+  onSelectInterest,
   onGoToLikes,
   onGoToDiscover,
 }) => {
@@ -207,6 +227,12 @@ export const SwipeView: React.FC<SwipeViewProps> = ({
 
   const activeProfile = deckProfiles[0] || null;
   const nextProfile = deckProfiles[1] || null;
+  const viewerInterestSet = new Set(viewerInterests.map(normalizeInterestKey));
+  const activeSharedCount = activeProfile
+    ? activeProfile.interests.filter((i) =>
+        viewerInterestSet.has(normalizeInterestKey(i))
+      ).length
+    : 0;
 
   const triggerSwipe = (direction: 'left' | 'right') => {
     if (!activeProfile || swipingLock) return;
@@ -241,15 +267,15 @@ export const SwipeView: React.FC<SwipeViewProps> = ({
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-          className="rounded-3xl bg-white border border-zinc-200 p-8 sm:p-12 shadow-xs"
+          className="rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-8 sm:p-12 shadow-xs"
         >
-          <div className="w-14 h-14 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto mb-5">
+          <div className="w-14 h-14 rounded-2xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center mx-auto mb-5">
             <Heart className="w-7 h-7" />
           </div>
-          <h1 className="text-2xl font-bold text-zinc-900 text-balance">
+          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50 text-balance">
             Du har sett alle nye forslag i området ditt
           </h1>
-          <p className="text-sm sm:text-base text-zinc-500 mt-2 max-w-md mx-auto">
+          <p className="text-sm sm:text-base text-zinc-500 dark:text-zinc-400 mt-2 max-w-md mx-auto">
             Ta en titt på hvem som allerede har likt deg, eller gå tilbake om du
             sveipet litt for raskt.
           </p>
@@ -268,7 +294,7 @@ export const SwipeView: React.FC<SwipeViewProps> = ({
               <button
                 type="button"
                 onClick={onRewind}
-                className="w-full sm:w-auto min-h-[48px] px-5 py-3 rounded-xl border border-zinc-200 bg-white text-zinc-800 text-sm font-semibold hover:bg-zinc-50 inline-flex items-center justify-center gap-2 transition whitespace-nowrap"
+                className="w-full sm:w-auto min-h-[48px] px-5 py-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-100 text-sm font-semibold hover:bg-zinc-50 dark:hover:bg-zinc-700 inline-flex items-center justify-center gap-2 transition whitespace-nowrap"
               >
                 <RotateCcw className="w-4 h-4" />
                 <span>Angre siste sveip</span>
@@ -277,7 +303,7 @@ export const SwipeView: React.FC<SwipeViewProps> = ({
             <button
               type="button"
               onClick={onGoToDiscover}
-              className="w-full sm:w-auto min-h-[48px] px-5 py-3 rounded-xl border border-zinc-200 bg-white text-zinc-700 text-sm font-medium hover:bg-zinc-50 transition whitespace-nowrap"
+              className="w-full sm:w-auto min-h-[48px] px-5 py-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-700 transition whitespace-nowrap"
             >
               Utforsk alle profiler
             </button>
@@ -300,6 +326,7 @@ export const SwipeView: React.FC<SwipeViewProps> = ({
                 isTop={false}
                 exitDirection={null}
                 reducedMotion={prefersReducedMotion}
+                sharedInterestCount={0}
                 onCommitSwipe={() => {}}
                 onOpenDetails={() => {}}
               />
@@ -311,6 +338,7 @@ export const SwipeView: React.FC<SwipeViewProps> = ({
                 isTop={true}
                 exitDirection={exitDirection}
                 reducedMotion={prefersReducedMotion}
+                sharedInterestCount={activeSharedCount}
                 onCommitSwipe={triggerSwipe}
                 onOpenDetails={() => onSelectProfile(activeProfile)}
               />
@@ -327,7 +355,7 @@ export const SwipeView: React.FC<SwipeViewProps> = ({
                 onRewind();
               }}
               disabled={!canRewind}
-              className="min-h-[48px] min-w-[48px] rounded-full border border-zinc-200 bg-white text-zinc-600 flex items-center justify-center shadow-xs hover:bg-zinc-50 disabled:opacity-35 transition"
+              className="min-h-[48px] min-w-[48px] rounded-full border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 flex items-center justify-center shadow-xs hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-35 transition"
               aria-label="Angre forrige sveip"
               title="Angre"
             >
@@ -338,7 +366,7 @@ export const SwipeView: React.FC<SwipeViewProps> = ({
               whileTap={{ scale: 0.92 }}
               type="button"
               onClick={() => triggerSwipe('left')}
-              className="min-h-[60px] min-w-[60px] rounded-full border border-zinc-200 bg-white text-zinc-800 flex items-center justify-center shadow-sm hover:bg-zinc-50 transition"
+              className="min-h-[60px] min-w-[60px] rounded-full border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-100 flex items-center justify-center shadow-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
               aria-label={`Hopp over ${activeProfile.name}`}
               title="Avvis (sveip venstre)"
             >
@@ -360,7 +388,7 @@ export const SwipeView: React.FC<SwipeViewProps> = ({
               whileTap={{ scale: 0.92 }}
               type="button"
               onClick={() => onSelectProfile(activeProfile)}
-              className="min-h-[48px] min-w-[48px] rounded-full border border-zinc-200 bg-white text-zinc-600 flex items-center justify-center shadow-xs hover:bg-zinc-50 transition"
+              className="min-h-[48px] min-w-[48px] rounded-full border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 flex items-center justify-center shadow-xs hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
               aria-label="Vis fullstendig profil"
               title="Full profil"
             >
@@ -368,13 +396,13 @@ export const SwipeView: React.FC<SwipeViewProps> = ({
             </motion.button>
           </div>
 
-          <p className="mt-3 text-xs text-zinc-400 text-center">
+          <p className="mt-3 text-xs text-zinc-400 dark:text-zinc-500 text-center">
             Sveip kortet mot høyre for å like, eller venstre for å gå videre
           </p>
         </div>
 
         {/* Right Desktop Column: Animated Full Profile Bio & Prompts */}
-        <aside className="hidden lg:flex lg:col-span-6 flex-col justify-between rounded-3xl bg-white border border-zinc-200 p-8 shadow-xs overflow-hidden">
+        <aside className="hidden lg:flex lg:col-span-6 flex-col justify-between rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-8 shadow-xs overflow-hidden">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeProfile.id}
@@ -384,10 +412,10 @@ export const SwipeView: React.FC<SwipeViewProps> = ({
               transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
               className="space-y-6 flex-1"
             >
-              <div className="flex items-start justify-between gap-4 pb-5 border-b border-zinc-100">
+              <div className="flex items-start justify-between gap-4 pb-5 border-b border-zinc-100 dark:border-zinc-800">
                 <div>
                   <div className="flex items-center gap-2">
-                    <h2 className="text-2xl font-bold text-zinc-900">
+                    <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
                       {activeProfile.name},{' '}
                       <span className="tabular-nums">{activeProfile.age}</span>
                     </h2>
@@ -395,18 +423,18 @@ export const SwipeView: React.FC<SwipeViewProps> = ({
                       <VerifiedBadge size="md" showLabel />
                     )}
                   </div>
-                  <p className="text-sm text-zinc-500 mt-1">
+                  <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
                     {activeProfile.occupation} · {activeProfile.city} ·{' '}
                     <span className="tabular-nums">
                       {activeProfile.distanceKm} km unna
                     </span>
                   </p>
-                  <p className="text-xs text-zinc-400 mt-1">
+                  <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-1">
                     {activeProfile.education} · {activeProfile.relationshipGoal}
                   </p>
                 </div>
 
-                <span className="text-xs font-medium text-zinc-500 whitespace-nowrap">
+                <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400 whitespace-nowrap">
                   {activeProfile.isOnline
                     ? 'Aktiv nå'
                     : activeProfile.lastActiveLabel}
@@ -414,37 +442,27 @@ export const SwipeView: React.FC<SwipeViewProps> = ({
               </div>
 
               <div>
-                <h3 className="text-xs font-semibold text-zinc-400 mb-2">
+                <h3 className="text-xs font-semibold text-zinc-400 dark:text-zinc-500 mb-2">
                   Biografi
                 </h3>
-                <p className="text-base text-zinc-700 leading-relaxed">
+                <p className="text-base text-zinc-700 dark:text-zinc-300 leading-relaxed">
                   {activeProfile.bio}
                 </p>
               </div>
 
-              <div>
-                <h3 className="text-xs font-semibold text-zinc-400 mb-2">
-                  Interesser
-                </h3>
-                <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-sm text-zinc-700">
-                  {activeProfile.interests.map((item, idx) => (
-                    <React.Fragment key={item}>
-                      {idx > 0 && (
-                        <span aria-hidden="true" className="text-zinc-300">
-                          ·
-                        </span>
-                      )}
-                      <span>{item}</span>
-                    </React.Fragment>
-                  ))}
-                </div>
-              </div>
+              <InterestBadges
+                interests={activeProfile.interests}
+                viewerInterests={viewerInterests}
+                matchingCountsByInterest={matchingCountsByInterest}
+                onSelectInterest={onSelectInterest}
+                compact
+              />
 
-              <div className="space-y-4 pt-4 border-t border-zinc-100">
+              <div className="space-y-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
                 {activeProfile.prompts.map((p) => (
                   <div key={p.question}>
-                    <p className="text-xs text-zinc-500">{p.question}</p>
-                    <p className="text-base font-medium text-zinc-900 mt-1">
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">{p.question}</p>
+                    <p className="text-base font-medium text-zinc-900 dark:text-zinc-100 mt-1">
                       «{p.answer}»
                     </p>
                   </div>
@@ -453,8 +471,8 @@ export const SwipeView: React.FC<SwipeViewProps> = ({
             </motion.div>
           </AnimatePresence>
 
-          <div className="pt-6 mt-6 border-t border-zinc-100 flex items-center gap-2.5 text-xs text-zinc-500">
-            <ShieldCheck className="w-4 h-4 text-sky-600 shrink-0" />
+          <div className="pt-6 mt-6 border-t border-zinc-100 dark:border-zinc-800 flex items-center gap-2.5 text-xs text-zinc-500 dark:text-zinc-400">
+            <ShieldCheck className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
             <span>
               {activeProfile.verified
                 ? 'Profilen er selfie-verifisert med pose-gjenkjenning.'

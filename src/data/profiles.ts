@@ -76,6 +76,7 @@ export const PROFILES: DatingProfile[] = [
       'Hva er din ultimate sjømatrett når du inviterer på middag?',
       'Seiltur langs kysten eller hyttehelg på fjellet?',
     ],
+    readReceiptsEnabled: true,
   },
   {
     id: 'sofie',
@@ -110,6 +111,7 @@ export const PROFILES: DatingProfile[] = [
       'Hva får deg alltid til å le så mye at du glemmer tiden?',
       'Hvis vi kunne reist hvor som helst neste fredag etter jobb, hvor drar vi?',
     ],
+    readReceiptsEnabled: true,
   },
   {
     id: 'nora',
@@ -144,6 +146,7 @@ export const PROFILES: DatingProfile[] = [
       'Hvis vi bygger en spilleliste for en roadtrip, hvilke tre låter må med først?',
       'Grønne planter overalt i leiligheten — hvor mange har du egentlig nå?',
     ],
+    readReceiptsEnabled: true,
   },
   {
     id: 'kasper',
@@ -178,6 +181,7 @@ export const PROFILES: DatingProfile[] = [
       'Bålkaffe under nordlyset eller midnattssol ved havet?',
       'Hva pakker du alltid med i sekken som turkameratene dine blir misunnelige på?',
     ],
+    readReceiptsEnabled: false,
   },
   {
     id: 'emil',
@@ -212,6 +216,7 @@ export const PROFILES: DatingProfile[] = [
       'Hva er signaturretten din når du vil imponere på kjøkkenet?',
       'Rolig vinylkveld hjemme eller intimkonsert på en liten scene i byen?',
     ],
+    readReceiptsEnabled: false,
   },
   {
     id: 'ingrid',
@@ -246,6 +251,7 @@ export const PROFILES: DatingProfile[] = [
       'Søndagstur i Nordmarka med termos eller lang brunsj på Grünerløkka?',
       'Hva er den siste boka du leste som du fortsatt tenker på?',
     ],
+    readReceiptsEnabled: true,
   },
   {
     id: 'astrid',
@@ -280,6 +286,7 @@ export const PROFILES: DatingProfile[] = [
       'Hvilket land på togreisen gjennom Europa hadde den beste maten?',
       'Isbad i fjorden før frokost — ja eller absolutt nei?',
     ],
+    readReceiptsEnabled: true,
   },
   {
     id: 'sander',
@@ -314,6 +321,7 @@ export const PROFILES: DatingProfile[] = [
       'Hvilken konsertopplevelse glemmer du aldri?',
       'Nordover eller sørover hvis vi kaster oss i bilen på fredag?',
     ],
+    readReceiptsEnabled: true,
   },
 ];
 

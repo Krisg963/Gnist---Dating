@@ -46,18 +46,18 @@ export const BlockUserModal: React.FC<BlockUserModalProps> = ({
             role="dialog"
             aria-modal="true"
             aria-labelledby="block-user-modal-title"
-            className="w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-3xl overflow-hidden shadow-2xl border border-zinc-200"
+            className="w-full sm:max-w-md bg-white dark:bg-zinc-900 rounded-t-3xl sm:rounded-3xl overflow-hidden shadow-2xl border border-zinc-200 dark:border-zinc-800 transition-colors"
           >
             {/* Mobile Sheet Handle */}
-            <div className="sm:hidden pt-2.5 pb-1 flex justify-center bg-white">
-              <div className="w-10 h-1.5 rounded-full bg-zinc-300" />
+            <div className="sm:hidden pt-2.5 pb-1 flex justify-center bg-white dark:bg-zinc-900">
+              <div className="w-10 h-1.5 rounded-full bg-zinc-300 dark:bg-zinc-700" />
             </div>
 
             <div className="p-5 sm:p-6 space-y-5">
               {/* Header */}
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3.5 min-w-0">
-                  <div className="relative w-12 h-12 rounded-full overflow-hidden bg-zinc-100 shrink-0">
+                  <div className="relative w-12 h-12 rounded-full overflow-hidden bg-zinc-100 dark:bg-zinc-800 shrink-0">
                     <SafeImage
                       src={profile.image}
                       alt={profile.name}
@@ -67,11 +67,11 @@ export const BlockUserModal: React.FC<BlockUserModalProps> = ({
                   <div className="min-w-0">
                     <h2
                       id="block-user-modal-title"
-                      className="text-lg font-bold text-zinc-900 truncate"
+                      className="text-lg font-bold text-zinc-900 dark:text-zinc-50 truncate"
                     >
                       Blokker {profile.name}?
                     </h2>
-                    <p className="text-xs text-zinc-500 mt-0.5">
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
                       Personen får ikke varsel om blokkeringen
                     </p>
                   </div>
@@ -80,7 +80,7 @@ export const BlockUserModal: React.FC<BlockUserModalProps> = ({
                 <button
                   type="button"
                   onClick={onClose}
-                  className="min-h-[40px] min-w-[40px] -mr-2 -mt-1 flex items-center justify-center text-zinc-400 hover:text-zinc-900 rounded-full"
+                  className="min-h-[40px] min-w-[40px] -mr-2 -mt-1 flex items-center justify-center text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 rounded-full transition"
                   aria-label="Lukk dialog"
                 >
                   <X className="w-5 h-5" />
@@ -88,9 +88,9 @@ export const BlockUserModal: React.FC<BlockUserModalProps> = ({
               </div>
 
               {/* Consequences Summary */}
-              <div className="text-xs sm:text-sm text-zinc-600 space-y-2 py-3.5 border-y border-zinc-100 leading-relaxed">
+              <div className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-300 space-y-2 py-3.5 border-y border-zinc-100 dark:border-zinc-800 leading-relaxed">
                 <p>
-                  • <strong className="text-zinc-900">{profile.name}</strong> fjernes umiddelbart fra dine matche-lister og samtaleloggen.
+                  • <strong className="text-zinc-900 dark:text-zinc-100">{profile.name}</strong> fjernes umiddelbart fra dine matche-lister og samtaleloggen.
                 </p>
                 <p>
                   • Profilen skjules fra Utforsk, Sveip, Hvem likte deg og Live-sendinger.
@@ -102,7 +102,7 @@ export const BlockUserModal: React.FC<BlockUserModalProps> = ({
 
               {/* Reason Selector */}
               <div>
-                <p className="text-xs font-semibold text-zinc-700 mb-2">
+                <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-2">
                   Velg årsak (kun synlig for deg)
                 </p>
                 <div className="space-y-1.5">
@@ -116,8 +116,8 @@ export const BlockUserModal: React.FC<BlockUserModalProps> = ({
                         aria-pressed={active}
                         className={`w-full min-h-[42px] px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium flex items-center justify-between gap-2 text-left transition ${
                           active
-                            ? 'bg-zinc-900 text-white'
-                            : 'border border-zinc-200 bg-zinc-50/70 text-zinc-700 hover:bg-zinc-100'
+                            ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900'
+                            : 'border border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-800/60 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800'
                         }`}
                       >
                         <span>{reason}</span>
@@ -133,7 +133,7 @@ export const BlockUserModal: React.FC<BlockUserModalProps> = ({
                 <button
                   type="button"
                   onClick={onClose}
-                  className="flex-1 min-h-[48px] px-4 py-2.5 rounded-xl border border-zinc-200 bg-white text-zinc-800 text-sm font-semibold hover:bg-zinc-50 active:scale-[0.99] transition whitespace-nowrap"
+                  className="flex-1 min-h-[48px] px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-100 text-sm font-semibold hover:bg-zinc-50 dark:hover:bg-zinc-700 active:scale-[0.99] transition whitespace-nowrap"
                 >
                   Avbryt
                 </button>

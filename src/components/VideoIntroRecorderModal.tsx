@@ -383,18 +383,18 @@ export const VideoIntroRecorderModal: React.FC<
             role="dialog"
             aria-modal="true"
             aria-labelledby="video-intro-modal-title"
-            className="w-full sm:max-w-lg max-h-[94vh] bg-white rounded-t-3xl sm:rounded-3xl overflow-hidden flex flex-col shadow-2xl border border-zinc-200"
+            className="w-full sm:max-w-lg max-h-[94vh] bg-white dark:bg-zinc-900 rounded-t-3xl sm:rounded-3xl overflow-hidden flex flex-col shadow-2xl border border-zinc-200 dark:border-zinc-800 transition-colors"
           >
             {/* Header */}
-            <div className="px-5 py-4 border-b border-zinc-100 flex items-center justify-between gap-3 shrink-0">
+            <div className="px-5 py-4 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between gap-3 shrink-0">
               <div>
                 <h2
                   id="video-intro-modal-title"
-                  className="text-base sm:text-lg font-bold text-zinc-900"
+                  className="text-base sm:text-lg font-bold text-zinc-900 dark:text-zinc-50"
                 >
                   15-sekunders video-introduksjon
                 </h2>
-                <p className="text-xs text-zinc-500 mt-0.5">
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
                   Vis stemmen og energien din med kamera og mikrofon
                 </p>
               </div>
@@ -403,7 +403,7 @@ export const VideoIntroRecorderModal: React.FC<
                 type="button"
                 disabled={isRecording}
                 onClick={onClose}
-                className="min-h-[42px] min-w-[42px] -mr-2 flex items-center justify-center text-zinc-400 hover:text-zinc-900 disabled:opacity-40 rounded-full"
+                className="min-h-[42px] min-w-[42px] -mr-2 flex items-center justify-center text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 disabled:opacity-40 rounded-full transition"
                 aria-label="Lukk videoopptaker"
               >
                 <X className="w-5 h-5" />
@@ -416,7 +416,7 @@ export const VideoIntroRecorderModal: React.FC<
               <div>
                 <label
                   htmlFor="video-intro-prompt"
-                  className="block text-xs font-semibold text-zinc-700 mb-1.5"
+                  className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5"
                 >
                   Velg tema for introduksjonen
                 </label>
@@ -425,7 +425,7 @@ export const VideoIntroRecorderModal: React.FC<
                   disabled={isRecording}
                   value={selectedPrompt}
                   onChange={(e) => setSelectedPrompt(e.target.value)}
-                  className="w-full min-h-[44px] px-3.5 rounded-xl border border-zinc-200 bg-zinc-50 text-xs sm:text-sm text-zinc-900 focus:outline-none focus:border-zinc-900"
+                  className="w-full min-h-[44px] px-3.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-xs sm:text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-300"
                 >
                   {INTRO_PROMPTS.map((prompt) => (
                     <option key={prompt} value={prompt}>
@@ -552,7 +552,7 @@ export const VideoIntroRecorderModal: React.FC<
               {uploadError && (
                 <p
                   role="alert"
-                  className="text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-xl px-3.5 py-2.5"
+                  className="text-xs font-medium text-red-600 dark:text-red-300 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 rounded-xl px-3.5 py-2.5"
                 >
                   {uploadError}
                 </p>
@@ -568,7 +568,7 @@ export const VideoIntroRecorderModal: React.FC<
 
               {/* Secondary File Upload Escape Hatch when not recording */}
               {!recordedDataUrl && !permissionError && !isRecording && (
-                <div className="flex items-center justify-between text-xs text-zinc-500 pt-0.5">
+                <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400 pt-0.5">
                   <span>
                     {existingVideoUrl
                       ? 'Nytt opptak erstatter nåværende video-intro.'
@@ -577,7 +577,7 @@ export const VideoIntroRecorderModal: React.FC<
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="font-semibold text-zinc-700 hover:text-zinc-900 underline underline-offset-2 whitespace-nowrap ml-2"
+                    className="font-semibold text-zinc-700 dark:text-zinc-200 hover:text-zinc-900 dark:hover:text-zinc-50 underline underline-offset-2 whitespace-nowrap ml-2"
                   >
                     Eller velg videofil
                   </button>
@@ -586,14 +586,14 @@ export const VideoIntroRecorderModal: React.FC<
             </div>
 
             {/* Footer Controls */}
-            <div className="p-4 sm:px-5 sm:py-4 border-t border-zinc-100 bg-white flex items-center gap-2.5 shrink-0 pb-safe">
+            <div className="p-4 sm:px-5 sm:py-4 border-t border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex items-center gap-2.5 shrink-0 pb-safe">
               {recordedDataUrl ? (
                 <>
                   <button
                     type="button"
                     disabled={saving}
                     onClick={handleRetake}
-                    className="flex-1 min-h-[48px] px-4 py-2.5 rounded-xl border border-zinc-200 bg-white text-zinc-800 text-sm font-semibold hover:bg-zinc-50 inline-flex items-center justify-center gap-2 transition whitespace-nowrap"
+                    className="flex-1 min-h-[48px] px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-100 text-sm font-semibold hover:bg-zinc-50 dark:hover:bg-zinc-700 inline-flex items-center justify-center gap-2 transition whitespace-nowrap"
                   >
                     <RotateCcw className="w-4 h-4" />
                     <span>Spill inn på nytt</span>
@@ -617,7 +617,7 @@ export const VideoIntroRecorderModal: React.FC<
                 <button
                   type="button"
                   onClick={stopRecording}
-                  className="w-full min-h-[50px] px-5 py-3 rounded-xl bg-zinc-900 text-white text-sm font-semibold hover:bg-zinc-800 inline-flex items-center justify-center gap-2 transition whitespace-nowrap"
+                  className="w-full min-h-[50px] px-5 py-3 rounded-xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-sm font-semibold hover:bg-zinc-800 dark:hover:bg-white inline-flex items-center justify-center gap-2 transition whitespace-nowrap"
                 >
                   <Square className="w-4 h-4 text-rose-500" fill="currentColor" />
                   <span className="tabular-nums">
@@ -629,7 +629,7 @@ export const VideoIntroRecorderModal: React.FC<
                   <button
                     type="button"
                     onClick={onClose}
-                    className="min-h-[48px] px-4 py-2.5 rounded-xl border border-zinc-200 bg-white text-zinc-700 text-sm font-semibold hover:bg-zinc-50 transition whitespace-nowrap"
+                    className="min-h-[48px] px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 text-sm font-semibold hover:bg-zinc-50 dark:hover:bg-zinc-700 transition whitespace-nowrap"
                   >
                     Avbryt
                   </button>

@@ -173,10 +173,10 @@ export const LiveStreamView: React.FC<LiveStreamViewProps> = ({
       {/* Header & Stream Selector */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-900">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
             Live-strømming
           </h1>
-          <p className="text-sm text-zinc-500 mt-1">
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
             Møt folk i sanntid gjennom direktesendinger og åpen chat
           </p>
         </div>
@@ -190,9 +190,9 @@ export const LiveStreamView: React.FC<LiveStreamViewProps> = ({
                 const fallback = streams.find((s) => !s.isUserHost);
                 if (fallback) setSelectedStreamId(fallback.id);
               }}
-              className="min-h-[44px] px-4 py-2.5 rounded-xl bg-zinc-900 text-white text-sm font-semibold inline-flex items-center gap-2 hover:bg-zinc-800 transition whitespace-nowrap shrink-0"
+              className="min-h-[44px] px-4 py-2.5 rounded-xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-sm font-semibold inline-flex items-center gap-2 hover:bg-zinc-800 dark:hover:bg-white transition whitespace-nowrap shrink-0"
             >
-              <VideoOff className="w-4 h-4 text-rose-400" />
+              <VideoOff className="w-4 h-4 text-rose-400 dark:text-rose-600" />
               <span>Avslutt min sending</span>
             </button>
           ) : (
@@ -221,11 +221,11 @@ export const LiveStreamView: React.FC<LiveStreamViewProps> = ({
               onClick={() => setSelectedStreamId(room.id)}
               className={`min-h-[56px] px-3.5 py-2 rounded-2xl border flex items-center gap-3 text-left shrink-0 transition ${
                 isSelected
-                  ? 'border-zinc-900 bg-white shadow-xs'
-                  : 'border-zinc-200 bg-white/70 hover:bg-white'
+                  ? 'border-zinc-900 dark:border-zinc-100 bg-white dark:bg-zinc-900 shadow-xs'
+                  : 'border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-900/60 hover:bg-white dark:hover:bg-zinc-900'
               }`}
             >
-              <div className="relative w-10 h-10 rounded-full overflow-hidden bg-zinc-200 shrink-0 ring-2 ring-rose-500">
+              <div className="relative w-10 h-10 rounded-full overflow-hidden bg-zinc-200 dark:bg-zinc-800 shrink-0 ring-2 ring-rose-500">
                 {room.isUserHost ? (
                   <SafeImage
                     src={
@@ -249,13 +249,13 @@ export const LiveStreamView: React.FC<LiveStreamViewProps> = ({
 
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-sm font-semibold text-zinc-900 whitespace-nowrap">
+                  <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-50 whitespace-nowrap">
                     {room.hostName}
                     {room.isUserHost ? ' (Deg)' : ''}
                   </span>
                   {room.hostVerified && <VerifiedBadge size="sm" />}
                 </div>
-                <p className="text-xs text-zinc-500 tabular-nums whitespace-nowrap">
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 tabular-nums whitespace-nowrap">
                   Direkte · {room.viewerCount} ser nå
                 </p>
               </div>
@@ -420,14 +420,14 @@ export const LiveStreamView: React.FC<LiveStreamViewProps> = ({
           </div>
 
           {/* Right: Real-time Chat & Host Moderation Panel */}
-          <div className="lg:col-span-5 rounded-3xl bg-white border border-zinc-200 flex flex-col h-[460px] lg:h-[560px] shadow-xs overflow-hidden">
+          <div className="lg:col-span-5 rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 flex flex-col h-[460px] lg:h-[560px] shadow-xs overflow-hidden">
             {/* Chat Header + Moderator Switch */}
-            <div className="px-4 sm:px-5 py-3.5 border-b border-zinc-100 flex items-center justify-between gap-2 shrink-0">
+            <div className="px-4 sm:px-5 py-3.5 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between gap-2 shrink-0">
               <div>
-                <h3 className="text-sm font-bold text-zinc-900">
+                <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-50">
                   Direktechat
                 </h3>
-                <p className="text-xs text-zinc-500">
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
                   {activeStream.isUserHost
                     ? 'Du er vert — modereringsverktøy er aktive'
                     : isEffectiveModerator
@@ -442,8 +442,8 @@ export const LiveStreamView: React.FC<LiveStreamViewProps> = ({
                   onClick={() => setHostModerationEnabled((v) => !v)}
                   className={`min-h-[40px] px-3 py-1.5 rounded-xl text-xs font-medium inline-flex items-center gap-1.5 transition whitespace-nowrap shrink-0 ${
                     hostModerationEnabled
-                      ? 'bg-zinc-900 text-white'
-                      : 'border border-zinc-200 text-zinc-700 hover:bg-zinc-50'
+                      ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900'
+                      : 'border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800'
                   }`}
                 >
                   <ShieldAlert className="w-3.5 h-3.5" />
@@ -455,7 +455,7 @@ export const LiveStreamView: React.FC<LiveStreamViewProps> = ({
             {/* Messages Scroll Area */}
             <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3">
               {visibleComments.length === 0 ? (
-                <p className="text-sm text-zinc-400 text-center py-8">
+                <p className="text-sm text-zinc-400 dark:text-zinc-500 text-center py-8">
                   Ingen kommentarer ennå. Vær den første til å hilse!
                 </p>
               ) : (
@@ -469,33 +469,35 @@ export const LiveStreamView: React.FC<LiveStreamViewProps> = ({
                     <div
                       key={comment.id}
                       className={`rounded-2xl p-3 transition ${
-                        isPinned ? 'bg-rose-50/70 border border-rose-100' : 'bg-zinc-50'
+                        isPinned
+                          ? 'bg-rose-50/70 dark:bg-rose-950/35 border border-rose-100 dark:border-rose-900/60'
+                          : 'bg-zinc-50 dark:bg-zinc-800/70'
                       }`}
                     >
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5 min-w-0">
-                          <span className="text-xs font-semibold text-zinc-900 truncate">
+                          <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate">
                             {comment.authorName}
                           </span>
                           {comment.authorVerified && <VerifiedBadge size="sm" />}
                           {isAuthorMuted && (
-                            <span className="text-[11px] text-rose-600 font-medium">
+                            <span className="text-[11px] text-rose-600 dark:text-rose-400 font-medium">
                               · Dempet
                             </span>
                           )}
                         </div>
-                        <span className="text-[11px] text-zinc-400 tabular-nums shrink-0">
+                        <span className="text-[11px] text-zinc-400 dark:text-zinc-500 tabular-nums shrink-0">
                           {comment.createdAt}
                         </span>
                       </div>
 
-                      <p className="text-sm text-zinc-700 mt-1 leading-snug break-words">
+                      <p className="text-sm text-zinc-700 dark:text-zinc-200 mt-1 leading-snug break-words">
                         {comment.text}
                       </p>
 
                       {/* Host Moderation Controls */}
                       {isEffectiveModerator && (
-                        <div className="mt-2 pt-2 border-t border-zinc-200/60 flex items-center gap-3 text-xs">
+                        <div className="mt-2 pt-2 border-t border-zinc-200/60 dark:border-zinc-700/80 flex items-center gap-3 text-xs">
                           <button
                             type="button"
                             onClick={() =>
@@ -503,7 +505,7 @@ export const LiveStreamView: React.FC<LiveStreamViewProps> = ({
                                 commentId: comment.id,
                               })
                             }
-                            className="min-h-[32px] text-zinc-600 hover:text-zinc-900 font-medium inline-flex items-center gap-1"
+                            className="min-h-[32px] text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white font-medium inline-flex items-center gap-1"
                           >
                             <Pin className="w-3.5 h-3.5" />
                             <span>{isPinned ? 'Løsne' : 'Fest'}</span>
@@ -516,7 +518,7 @@ export const LiveStreamView: React.FC<LiveStreamViewProps> = ({
                                 commentId: comment.id,
                               })
                             }
-                            className="min-h-[32px] text-rose-600 hover:text-rose-700 font-medium inline-flex items-center gap-1"
+                            className="min-h-[32px] text-rose-600 dark:text-rose-400 hover:text-rose-700 font-medium inline-flex items-center gap-1"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                             <span>Slett</span>
@@ -530,7 +532,7 @@ export const LiveStreamView: React.FC<LiveStreamViewProps> = ({
                                   authorId: comment.authorId,
                                 })
                               }
-                              className="min-h-[32px] text-zinc-500 hover:text-zinc-900 font-medium inline-flex items-center gap-1"
+                              className="min-h-[32px] text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white font-medium inline-flex items-center gap-1"
                             >
                               <VolumeX className="w-3.5 h-3.5" />
                               <span>{isAuthorMuted ? 'Opphev demping' : 'Demp'}</span>
@@ -547,7 +549,7 @@ export const LiveStreamView: React.FC<LiveStreamViewProps> = ({
             {/* Comment Composer */}
             <form
               onSubmit={handleCommentSubmit}
-              className="p-3.5 border-t border-zinc-100 bg-white flex items-center gap-2 shrink-0"
+              className="p-3.5 border-t border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex items-center gap-2 shrink-0"
             >
               <input
                 type="text"
@@ -559,12 +561,12 @@ export const LiveStreamView: React.FC<LiveStreamViewProps> = ({
                     ? 'Du er dempet i denne chatten'
                     : 'Skriv en kommentar i sanntid...'
                 }
-                className="flex-1 min-h-[44px] px-3.5 rounded-xl border border-zinc-200 bg-zinc-50 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:bg-white focus:border-zinc-900"
+                className="flex-1 min-h-[44px] px-3.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/80 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none focus:bg-white dark:focus:bg-zinc-800 focus:border-zinc-900 dark:focus:border-zinc-300"
               />
               <button
                 type="submit"
                 disabled={!commentText.trim() || userIsMutedInRoom}
-                className="min-h-[44px] min-w-[44px] rounded-xl bg-zinc-900 text-white flex items-center justify-center hover:bg-zinc-800 disabled:opacity-35 transition shrink-0"
+                className="min-h-[44px] min-w-[44px] rounded-xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 flex items-center justify-center hover:bg-zinc-800 dark:hover:bg-white disabled:opacity-35 transition shrink-0"
                 aria-label="Send kommentar"
               >
                 <Send className="w-4 h-4" />
@@ -582,18 +584,18 @@ export const LiveStreamView: React.FC<LiveStreamViewProps> = ({
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl bg-white p-6 sm:p-7 shadow-2xl pb-safe"
+            className="w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-6 sm:p-7 shadow-2xl pb-safe"
             role="dialog"
             aria-modal="true"
           >
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold text-zinc-900">
+              <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-50">
                 Start egen live-sending
               </h2>
               <button
                 type="button"
                 onClick={() => setShowGoLiveModal(false)}
-                className="min-h-[44px] min-w-[44px] -mr-2 flex items-center justify-center text-zinc-400 hover:text-zinc-800"
+                className="min-h-[44px] min-w-[44px] -mr-2 flex items-center justify-center text-zinc-400 hover:text-zinc-800 dark:hover:text-white"
                 aria-label="Lukk"
               >
                 <X className="w-5 h-5" />
@@ -602,7 +604,7 @@ export const LiveStreamView: React.FC<LiveStreamViewProps> = ({
 
             <form onSubmit={handleConfirmGoLive} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-zinc-600 mb-1.5">
+                <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-300 mb-1.5">
                   Tittel på sendingen
                 </label>
                 <input
@@ -610,12 +612,12 @@ export const LiveStreamView: React.FC<LiveStreamViewProps> = ({
                   required
                   value={newStreamTitle}
                   onChange={(e) => setNewStreamTitle(e.target.value)}
-                  className="w-full min-h-[46px] px-3.5 rounded-xl border border-zinc-200 text-sm text-zinc-900 focus:outline-none focus:border-zinc-900"
+                  className="w-full min-h-[46px] px-3.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/80 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-300"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-zinc-600 mb-1.5">
+                <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-300 mb-1.5">
                   Tema
                 </label>
                 <input
@@ -623,11 +625,11 @@ export const LiveStreamView: React.FC<LiveStreamViewProps> = ({
                   required
                   value={newStreamTopic}
                   onChange={(e) => setNewStreamTopic(e.target.value)}
-                  className="w-full min-h-[46px] px-3.5 rounded-xl border border-zinc-200 text-sm text-zinc-900 focus:outline-none focus:border-zinc-900"
+                  className="w-full min-h-[46px] px-3.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/80 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-300"
                 />
               </div>
 
-              <p className="text-xs text-zinc-500 leading-relaxed">
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
                 Som vert kan du feste hyggelige meldinger, slette uønskede kommentarer
                 og dempe brukere direkte i sanntidschatten.
               </p>

@@ -43,6 +43,7 @@ export interface DatingProfile {
   videoIntroDurationSec?: number | null;
   videoIntroPrompt?: string | null;
   icebreakers: [string, string, string];
+  readReceiptsEnabled?: boolean;
   isCurrentUserPreview?: boolean;
 }
 
@@ -65,6 +66,7 @@ export interface CurrentUser {
   verifiedAt: string | null;
   verificationPose: string | null;
   selfieDataUrl: string | null;
+  readReceiptsEnabled: boolean;
 }
 
 export interface SwipeHistoryEntry {
@@ -85,12 +87,26 @@ export interface LikeReceived {
   note: string;
 }
 
+export type ThemeMode = 'system' | 'light' | 'dark';
+
 export interface MatchRecord {
   id: string;
   profileId: string;
   matchedAt: string;
+  matchedAtIso?: string;
   icebreakers: [string, string, string];
   unreadCount: number;
+}
+
+export interface LiveLocationShare {
+  latitude: number;
+  longitude: number;
+  accuracyMeters: number | null;
+  startedAtIso: string;
+  expiresAtIso: string;
+  updatedAtIso: string;
+  stoppedAtIso?: string | null;
+  isActive: boolean;
 }
 
 export interface ChatMessage {
@@ -101,6 +117,8 @@ export interface ChatMessage {
   text: string;
   createdAt: string;
   isIcebreaker?: boolean;
+  readAt?: string | null;
+  liveLocation?: LiveLocationShare | null;
 }
 
 export interface StreamComment {
@@ -150,6 +168,16 @@ export interface BlockedUserRecord {
   reason: string;
 }
 
+export interface ReportedUserRecord {
+  id: string;
+  profileId: string;
+  matchId: string | null;
+  reason: string;
+  details: string;
+  alsoBlocked: boolean;
+  reportedAt: string;
+}
+
 export interface ServerState {
   currentUser: CurrentUser;
   swipeStats: SwipeStats;
@@ -157,6 +185,7 @@ export interface ServerState {
   swipedLeftIds: string[];
   swipeHistory: SwipeHistoryEntry[];
   blockedUsers: BlockedUserRecord[];
+  reportedUsers: ReportedUserRecord[];
   likesReceived: LikeReceived[];
   matches: MatchRecord[];
   messagesByMatch: Record<string, ChatMessage[]>;

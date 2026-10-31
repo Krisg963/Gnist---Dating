@@ -42,6 +42,7 @@ interface CurrentUser {
   verifiedAt: string | null;
   verificationPose: string | null;
   selfieDataUrl: string | null;
+  readReceiptsEnabled: boolean;
 }
 
 interface SwipeHistoryEntry {
@@ -66,8 +67,20 @@ interface MatchRecord {
   id: string;
   profileId: string;
   matchedAt: string;
+  matchedAtIso?: string;
   icebreakers: [string, string, string];
   unreadCount: number;
+}
+
+interface LiveLocationShare {
+  latitude: number;
+  longitude: number;
+  accuracyMeters: number | null;
+  startedAtIso: string;
+  expiresAtIso: string;
+  updatedAtIso: string;
+  stoppedAtIso?: string | null;
+  isActive: boolean;
 }
 
 interface ChatMessage {
@@ -78,6 +91,8 @@ interface ChatMessage {
   text: string;
   createdAt: string;
   isIcebreaker?: boolean;
+  readAt?: string | null;
+  liveLocation?: LiveLocationShare | null;
 }
 
 interface StreamComment {
@@ -115,6 +130,16 @@ interface BlockedUserRecord {
   reason: string;
 }
 
+interface ReportedUserRecord {
+  id: string;
+  profileId: string;
+  matchId: string | null;
+  reason: string;
+  details: string;
+  alsoBlocked: boolean;
+  reportedAt: string;
+}
+
 interface ServerState {
   currentUser: CurrentUser;
   swipeStats: SwipeStats;
@@ -122,6 +147,7 @@ interface ServerState {
   swipedLeftIds: string[];
   swipeHistory: SwipeHistoryEntry[];
   blockedUsers: BlockedUserRecord[];
+  reportedUsers: ReportedUserRecord[];
   likesReceived: LikeReceived[];
   matches: MatchRecord[];
   messagesByMatch: Record<string, ChatMessage[]>;
@@ -144,6 +170,17 @@ const PROFILE_DISPLAY_NAMES: Record<string, string> = {
   emil: 'Emil',
   astrid: 'Astrid',
   sander: 'Sander',
+};
+
+const PROFILE_READ_RECEIPTS: Record<string, boolean> = {
+  ingrid: true,
+  henrik: true,
+  nora: true,
+  kasper: false,
+  sofie: true,
+  emil: false,
+  astrid: true,
+  sander: true,
 };
 
 const ICEBREAKERS_BY_PROFILE: Record<string, [string, string, string]> = {
@@ -290,6 +327,7 @@ function createInitialState(): ServerState {
       verifiedAt: null,
       verificationPose: null,
       selfieDataUrl: null,
+      readReceiptsEnabled: true,
     },
     swipeStats: {
       rightCount: 5,
@@ -306,6 +344,7 @@ function createInitialState(): ServerState {
       },
     ],
     blockedUsers: [],
+    reportedUsers: [],
     likesReceived: [
       {
         profileId: 'henrik',
@@ -327,7 +366,8 @@ function createInitialState(): ServerState {
       {
         id: 'match-ingrid',
         profileId: 'ingrid',
-        matchedAt: 'I dag, 19:20',
+        matchedAt: formatExactDateTime(new Date(Date.now() - 42 * 60 * 1000)),
+        matchedAtIso: new Date(Date.now() - 42 * 60 * 1000).toISOString(),
         icebreakers: ICEBREAKERS_BY_PROFILE.ingrid,
         unreadCount: 1,
       },
@@ -335,12 +375,23 @@ function createInitialState(): ServerState {
     messagesByMatch: {
       'match-ingrid': [
         {
+          id: 'msg-seed-0',
+          matchId: 'match-ingrid',
+          senderId: 'me',
+          senderName: 'Maja',
+          text: 'Søndagstur i Nordmarka med termos eller lang brunsj på Grünerløkka?',
+          createdAt: '19:21',
+          isIcebreaker: true,
+          readAt: '19:21',
+        },
+        {
           id: 'msg-seed-1',
           matchId: 'match-ingrid',
           senderId: 'ingrid',
           senderName: 'Ingrid',
-          text: 'Hei! Så hyggelig at vi matchet. Håper uken din har startet bra!',
+          text: 'Hei! Så hyggelig at vi matchet — ja takk, gjerne begge deler! Håper uken din har startet bra!',
           createdAt: '19:22',
+          readAt: null,
         },
       ],
     },
@@ -464,12 +515,92 @@ function loadState(): ServerState {
       const raw = JSON.parse(
         fs.readFileSync(PERSIST_FILE, 'utf-8')
       ) as Partial<ServerState>;
+      const migratedMatches = Array.isArray(raw.matches)
+        ? raw.matches.map((m, idx) => {
+            const hasExactDate =
+              Boolean(m.matchedAtIso) &&
+              typeof m.matchedAt === 'string' &&
+              !m.matchedAt.startsWith('I dag');
+            if (hasExactDate) return m;
+            const fallbackDate = new Date(
+              Date.now() - (idx + 1) * 42 * 60 * 1000
+            );
+            const timePartMatch =
+              typeof m.matchedAt === 'string'
+                ? m.matchedAt.match(/(\d{1,2}:\d{2})/)
+                : null;
+            if (timePartMatch) {
+              const [hh, mm] = timePartMatch[1].split(':').map(Number);
+              if (Number.isFinite(hh) && Number.isFinite(mm)) {
+                fallbackDate.setHours(hh, mm, 0, 0);
+              }
+            }
+            return {
+              ...m,
+              matchedAt: formatExactDateTime(fallbackDate),
+              matchedAtIso: m.matchedAtIso || fallbackDate.toISOString(),
+            };
+          })
+        : defaults.matches;
+
+      const rawMessagesByMatch =
+        raw.messagesByMatch && typeof raw.messagesByMatch === 'object'
+          ? { ...raw.messagesByMatch }
+          : { ...defaults.messagesByMatch };
+
+      // Migrate match-ingrid seed thread and existing outgoing messages with readAt metadata
+      for (const [mId, msgs] of Object.entries(rawMessagesByMatch)) {
+        if (!Array.isArray(msgs)) continue;
+        const matchObj = migratedMatches.find((m) => m.id === mId);
+        const profileId = matchObj?.profileId || mId.replace(/^match-/, '');
+        const recipientAllowsRead = PROFILE_READ_RECEIPTS[profileId] !== false;
+
+        let updatedMsgs = msgs.map((msg) => {
+          if (
+            msg.senderId === 'me' &&
+            msg.readAt === undefined &&
+            recipientAllowsRead
+          ) {
+            return { ...msg, readAt: msg.createdAt };
+          }
+          return msg;
+        });
+
+        if (
+          mId === 'match-ingrid' &&
+          updatedMsgs.length === 1 &&
+          updatedMsgs[0].id === 'msg-seed-1'
+        ) {
+          updatedMsgs = [
+            {
+              id: 'msg-seed-0',
+              matchId: 'match-ingrid',
+              senderId: 'me',
+              senderName: raw.currentUser?.name || defaults.currentUser.name,
+              text: 'Søndagstur i Nordmarka med termos eller lang brunsj på Grünerløkka?',
+              createdAt: '19:21',
+              isIcebreaker: true,
+              readAt: '19:21',
+            },
+            updatedMsgs[0],
+          ];
+        }
+
+        rawMessagesByMatch[mId] = updatedMsgs;
+      }
+
       return {
         ...defaults,
         ...raw,
+        matches: migratedMatches,
+        messagesByMatch: rawMessagesByMatch,
         currentUser: {
           ...defaults.currentUser,
           ...(raw.currentUser || {}),
+          readReceiptsEnabled:
+            typeof raw.currentUser?.readReceiptsEnabled === 'boolean'
+              ? raw.currentUser.readReceiptsEnabled
+              : true,
         },
         swipeStats: {
           ...defaults.swipeStats,
@@ -479,6 +610,9 @@ function loadState(): ServerState {
           ? raw.swipeHistory.slice(0, 10)
           : defaults.swipeHistory,
         blockedUsers: Array.isArray(raw.blockedUsers) ? raw.blockedUsers : [],
+        reportedUsers: Array.isArray(raw.reportedUsers)
+          ? raw.reportedUsers
+          : [],
       };
     }
   } catch {
@@ -500,6 +634,19 @@ function persistState() {
 function formatNowTime(): string {
   const now = new Date();
   return now.toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' });
+}
+
+function formatExactDateTime(date: Date = new Date()): string {
+  const datePart = date.toLocaleDateString('nb-NO', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+  const timePart = date.toLocaleTimeString('nb-NO', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  return `${datePart} kl. ${timePart}`;
 }
 
 async function dispatchWebPush(
@@ -551,7 +698,21 @@ async function startServer() {
   app.use(express.json({ limit: '35mb' }));
 
   const httpServer = createServer(app);
-  const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
+  const wss = new WebSocketServer({ noServer: true });
+
+  httpServer.on('upgrade', (req, socket, head) => {
+    try {
+      const pathname = new URL(req.url || '/', 'http://localhost').pathname;
+      if (pathname === '/ws') {
+        wss.handleUpgrade(req, socket, head, (ws) => {
+          wss.emit('connection', ws, req);
+        });
+      }
+      // Leave all other upgrade paths (such as Vite HMR 'vite-hmr') untouched for Vite
+    } catch {
+      // Ignore malformed upgrade URLs
+    }
+  });
 
   function broadcast(event: string, payload: unknown) {
     const raw = JSON.stringify({ event, payload });
@@ -637,6 +798,48 @@ async function startServer() {
     return state;
   }
 
+  function handleReportUser(input: {
+    profileId: string;
+    matchId?: string | null;
+    reason?: string;
+    details?: string;
+    blockUser?: boolean;
+  }): { report: ReportedUserRecord | null; state: ServerState } {
+    const cleanId = input.profileId.trim();
+    if (!cleanId || cleanId === state.currentUser.id) {
+      return { report: null, state };
+    }
+
+    const cleanReason =
+      typeof input.reason === 'string' && input.reason.trim()
+        ? input.reason.trim().slice(0, 80)
+        : 'Upassende innhold';
+    const cleanDetails =
+      typeof input.details === 'string' ? input.details.trim().slice(0, 300) : '';
+    const shouldBlock = Boolean(input.blockUser);
+
+    const report: ReportedUserRecord = {
+      id: `rep-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      profileId: cleanId,
+      matchId: input.matchId || null,
+      reason: cleanReason,
+      details: cleanDetails,
+      alsoBlocked: shouldBlock,
+      reportedAt: formatExactDateTime(new Date()),
+    };
+
+    state.reportedUsers = [report, ...state.reportedUsers].slice(0, 50);
+
+    if (shouldBlock) {
+      handleBlockUser(cleanId, `Rapportert: ${cleanReason}`);
+    } else {
+      persistState();
+      broadcast('state:sync', state);
+    }
+
+    return { report, state };
+  }
+
   function recordSwipeHistory(entry: SwipeHistoryEntry) {
     state.swipeHistory = [
       entry,
@@ -708,10 +911,12 @@ async function startServer() {
       let match = state.matches.find((m) => m.id === matchId);
       const isNewlyCreated = !match;
       if (!match) {
+        const now = new Date();
         match = {
           id: matchId,
           profileId,
-          matchedAt: `I dag, ${formatNowTime()}`,
+          matchedAt: formatExactDateTime(now),
+          matchedAtIso: now.toISOString(),
           icebreakers: ICEBREAKERS_BY_PROFILE[profileId] || [
             'Hva er det beste som har skjedd deg denne uken?',
             'Kaffe på formiddagen eller et glass vin på kvelden?',
@@ -816,6 +1021,7 @@ async function startServer() {
       text: text.trim(),
       createdAt: formatNowTime(),
       isIcebreaker: Boolean(isIcebreaker),
+      readAt: null,
     };
     state.messagesByMatch[matchId].push(message);
 
@@ -832,6 +1038,36 @@ async function startServer() {
     broadcast('chat:message', { matchId, message });
     if (actualSenderId !== state.currentUser.id) {
       broadcast('state:sync', state);
+    } else {
+      // Simulate the match opening the message shortly after delivery if recipient has not disabled read receipts
+      const recipientId = targetMatch.profileId;
+      if (PROFILE_READ_RECEIPTS[recipientId] !== false) {
+        setTimeout(() => {
+          const activeMatch = state.matches.find((m) => m.id === matchId);
+          if (!activeMatch || isProfileBlocked(recipientId)) return;
+          if (PROFILE_READ_RECEIPTS[recipientId] === false) return;
+
+          const thread = state.messagesByMatch[matchId] || [];
+          const readTimestamp = formatNowTime();
+          const updatedIds: string[] = [];
+
+          for (const msg of thread) {
+            if (msg.senderId === state.currentUser.id && !msg.readAt) {
+              msg.readAt = readTimestamp;
+              updatedIds.push(msg.id);
+            }
+          }
+
+          if (updatedIds.length > 0) {
+            persistState();
+            broadcast('chat:read', {
+              matchId,
+              readAt: readTimestamp,
+              messageIds: updatedIds,
+            });
+          }
+        }, 1350);
+      }
     }
 
     // Dispatch Web Push notification to other connected devices/tabs (or all if incoming from match)
@@ -856,6 +1092,285 @@ async function startServer() {
     }
 
     return message;
+  }
+
+  const LIVE_LOCATION_DURATION_MS = 30 * 60 * 1000;
+
+  function pruneExpiredLiveLocations(): boolean {
+    const nowMs = Date.now();
+    let changed = false;
+    for (const msgs of Object.values(state.messagesByMatch)) {
+      if (!Array.isArray(msgs)) continue;
+      for (const msg of msgs) {
+        if (msg.liveLocation && msg.liveLocation.isActive) {
+          const expMs = Date.parse(msg.liveLocation.expiresAtIso);
+          if (!Number.isFinite(expMs) || nowMs >= expMs) {
+            msg.liveLocation = {
+              ...msg.liveLocation,
+              isActive: false,
+            };
+            changed = true;
+          }
+        }
+      }
+    }
+    if (changed) {
+      persistState();
+    }
+    return changed;
+  }
+
+  function handleStartLiveLocation(input: {
+    id?: string;
+    matchId: string;
+    latitude: number;
+    longitude: number;
+    accuracyMeters?: number | null;
+    originClientId?: string;
+  }): ChatMessage | null {
+    const { matchId, latitude, longitude, accuracyMeters, originClientId } =
+      input;
+    if (
+      !Number.isFinite(latitude) ||
+      !Number.isFinite(longitude) ||
+      latitude < -90 ||
+      latitude > 90 ||
+      longitude < -180 ||
+      longitude > 180
+    ) {
+      return null;
+    }
+
+    const targetMatch = state.matches.find((m) => m.id === matchId);
+    if (!targetMatch || isProfileBlocked(targetMatch.profileId)) {
+      return null;
+    }
+
+    if (!state.messagesByMatch[matchId]) {
+      state.messagesByMatch[matchId] = [];
+    }
+
+    const now = new Date();
+    const nowIso = now.toISOString();
+    const expiresIso = new Date(
+      now.getTime() + LIVE_LOCATION_DURATION_MS
+    ).toISOString();
+
+    // Stop any previous active live-location share from currentUser in this conversation
+    for (const prevMsg of state.messagesByMatch[matchId]) {
+      if (
+        prevMsg.senderId === state.currentUser.id &&
+        prevMsg.liveLocation?.isActive
+      ) {
+        prevMsg.liveLocation = {
+          ...prevMsg.liveLocation,
+          isActive: false,
+          stoppedAtIso: nowIso,
+          updatedAtIso: nowIso,
+        };
+        broadcast('location:updated', {
+          matchId,
+          messageId: prevMsg.id,
+          liveLocation: prevMsg.liveLocation,
+        });
+      }
+    }
+
+    const messageId =
+      input.id && input.id.trim()
+        ? input.id.trim()
+        : `loc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+
+    const existing = state.messagesByMatch[matchId].find(
+      (m) => m.id === messageId
+    );
+    if (existing) return existing;
+
+    const cleanAccuracy =
+      typeof accuracyMeters === 'number' &&
+      Number.isFinite(accuracyMeters) &&
+      accuracyMeters >= 0
+        ? Math.round(accuracyMeters)
+        : null;
+
+    const liveLocation: LiveLocationShare = {
+      latitude: Number(latitude.toFixed(6)),
+      longitude: Number(longitude.toFixed(6)),
+      accuracyMeters: cleanAccuracy,
+      startedAtIso: nowIso,
+      expiresAtIso: expiresIso,
+      updatedAtIso: nowIso,
+      stoppedAtIso: null,
+      isActive: true,
+    };
+
+    const message: ChatMessage = {
+      id: messageId,
+      matchId,
+      senderId: state.currentUser.id,
+      senderName: state.currentUser.name,
+      text: 'Deler live-posisjon i 30 minutter',
+      createdAt: formatNowTime(),
+      readAt: null,
+      liveLocation,
+    };
+
+    state.messagesByMatch[matchId].push(message);
+    targetMatch.unreadCount = 0;
+
+    persistState();
+    broadcast('chat:message', { matchId, message });
+
+    // Simulate read receipt from match if enabled
+    const recipientId = targetMatch.profileId;
+    if (PROFILE_READ_RECEIPTS[recipientId] !== false) {
+      setTimeout(() => {
+        const activeMatch = state.matches.find((m) => m.id === matchId);
+        if (!activeMatch || isProfileBlocked(recipientId)) return;
+        if (PROFILE_READ_RECEIPTS[recipientId] === false) return;
+
+        const thread = state.messagesByMatch[matchId] || [];
+        const readTimestamp = formatNowTime();
+        const updatedIds: string[] = [];
+
+        for (const msg of thread) {
+          if (msg.senderId === state.currentUser.id && !msg.readAt) {
+            msg.readAt = readTimestamp;
+            updatedIds.push(msg.id);
+          }
+        }
+
+        if (updatedIds.length > 0) {
+          persistState();
+          broadcast('chat:read', {
+            matchId,
+            readAt: readTimestamp,
+            messageIds: updatedIds,
+          });
+        }
+      }, 1350);
+    }
+
+    const pushPayload = {
+      title: `${state.currentUser.name} deler live-posisjon`,
+      body: 'Live-posisjon er delt i 30 minutter i samtalen.',
+      tag: `loc-${matchId}`,
+      data: { tab: 'messages', matchId, url: '/' },
+    };
+    void dispatchWebPush('message', pushPayload, originClientId);
+
+    return message;
+  }
+
+  function handleUpdateLiveLocation(input: {
+    matchId: string;
+    messageId?: string;
+    latitude: number;
+    longitude: number;
+    accuracyMeters?: number | null;
+  }): ChatMessage | null {
+    const { matchId, messageId, latitude, longitude, accuracyMeters } = input;
+    if (
+      !Number.isFinite(latitude) ||
+      !Number.isFinite(longitude) ||
+      latitude < -90 ||
+      latitude > 90 ||
+      longitude < -180 ||
+      longitude > 180
+    ) {
+      return null;
+    }
+
+    const thread = state.messagesByMatch[matchId];
+    if (!Array.isArray(thread)) return null;
+
+    const target = messageId
+      ? thread.find((m) => m.id === messageId && m.liveLocation)
+      : [...thread]
+          .reverse()
+          .find(
+            (m) =>
+              m.senderId === state.currentUser.id && m.liveLocation?.isActive
+          );
+
+    if (!target || !target.liveLocation) return null;
+
+    const nowMs = Date.now();
+    const expMs = Date.parse(target.liveLocation.expiresAtIso);
+    if (!target.liveLocation.isActive || nowMs >= expMs) {
+      if (target.liveLocation.isActive) {
+        target.liveLocation = {
+          ...target.liveLocation,
+          isActive: false,
+        };
+        persistState();
+        broadcast('location:updated', {
+          matchId,
+          messageId: target.id,
+          liveLocation: target.liveLocation,
+        });
+      }
+      return target;
+    }
+
+    const cleanAccuracy =
+      typeof accuracyMeters === 'number' &&
+      Number.isFinite(accuracyMeters) &&
+      accuracyMeters >= 0
+        ? Math.round(accuracyMeters)
+        : target.liveLocation.accuracyMeters;
+
+    target.liveLocation = {
+      ...target.liveLocation,
+      latitude: Number(latitude.toFixed(6)),
+      longitude: Number(longitude.toFixed(6)),
+      accuracyMeters: cleanAccuracy,
+      updatedAtIso: new Date(nowMs).toISOString(),
+    };
+
+    persistState();
+    broadcast('location:updated', {
+      matchId,
+      messageId: target.id,
+      liveLocation: target.liveLocation,
+    });
+    return target;
+  }
+
+  function handleStopLiveLocation(input: {
+    matchId: string;
+    messageId?: string;
+  }): ChatMessage | null {
+    const { matchId, messageId } = input;
+    const thread = state.messagesByMatch[matchId];
+    if (!Array.isArray(thread)) return null;
+
+    const nowIso = new Date().toISOString();
+    let updatedMsg: ChatMessage | null = null;
+
+    for (const msg of thread) {
+      if (!msg.liveLocation || !msg.liveLocation.isActive) continue;
+      if (messageId && msg.id !== messageId) continue;
+      if (!messageId && msg.senderId !== state.currentUser.id) continue;
+
+      msg.liveLocation = {
+        ...msg.liveLocation,
+        isActive: false,
+        stoppedAtIso: nowIso,
+        updatedAtIso: nowIso,
+      };
+      updatedMsg = msg;
+      broadcast('location:updated', {
+        matchId,
+        messageId: msg.id,
+        liveLocation: msg.liveLocation,
+      });
+    }
+
+    if (updatedMsg) {
+      persistState();
+    }
+    return updatedMsg;
   }
 
   // Web Push API Routes
@@ -974,6 +1489,7 @@ async function startServer() {
 
   // Standard App Routes
   app.get('/api/state', (_req, res) => {
+    pruneExpiredLiveLocations();
     res.json(state);
   });
 
@@ -1031,6 +1547,15 @@ async function startServer() {
     const match = state.matches.find((m) => m.id === req.params.matchId);
     if (match) {
       match.unreadCount = 0;
+      if (state.currentUser.readReceiptsEnabled !== false) {
+        const nowTime = formatNowTime();
+        const thread = state.messagesByMatch[match.id] || [];
+        for (const msg of thread) {
+          if (msg.senderId !== state.currentUser.id && !msg.readAt) {
+            msg.readAt = nowTime;
+          }
+        }
+      }
       persistState();
       broadcast('state:sync', state);
     }
@@ -1059,6 +1584,63 @@ async function startServer() {
     res.json({ message, state });
   });
 
+  app.post('/api/matches/:matchId/live-location/start', (req, res) => {
+    const { matchId } = req.params;
+    const { id, latitude, longitude, accuracyMeters, clientId } = req.body as {
+      id?: string;
+      latitude?: number;
+      longitude?: number;
+      accuracyMeters?: number | null;
+      clientId?: string;
+    };
+    if (typeof latitude !== 'number' || typeof longitude !== 'number') {
+      res.status(400).json({ error: 'Ugyldige GPS-koordinater' });
+      return;
+    }
+    const message = handleStartLiveLocation({
+      id,
+      matchId,
+      latitude,
+      longitude,
+      accuracyMeters,
+      originClientId: clientId,
+    });
+    if (!message) {
+      res.status(404).json({ error: 'Fant ikke gyldig samtale for posisjonsdeling' });
+      return;
+    }
+    res.json({ ok: true, message, state });
+  });
+
+  app.post('/api/matches/:matchId/live-location/update', (req, res) => {
+    const { matchId } = req.params;
+    const { messageId, latitude, longitude, accuracyMeters } = req.body as {
+      messageId?: string;
+      latitude?: number;
+      longitude?: number;
+      accuracyMeters?: number | null;
+    };
+    if (typeof latitude !== 'number' || typeof longitude !== 'number') {
+      res.status(400).json({ error: 'Ugyldige GPS-koordinater' });
+      return;
+    }
+    const message = handleUpdateLiveLocation({
+      matchId,
+      messageId,
+      latitude,
+      longitude,
+      accuracyMeters,
+    });
+    res.json({ ok: Boolean(message), message, state });
+  });
+
+  app.post('/api/matches/:matchId/live-location/stop', (req, res) => {
+    const { matchId } = req.params;
+    const { messageId } = req.body as { messageId?: string };
+    const message = handleStopLiveLocation({ matchId, messageId });
+    res.json({ ok: Boolean(message), message, state });
+  });
+
   app.post('/api/users/block', (req, res) => {
     const { profileId, reason } = req.body as {
       profileId?: string;
@@ -1080,6 +1662,32 @@ async function startServer() {
     }
     const updatedState = handleUnblockUser(profileId);
     res.json({ ok: true, state: updatedState });
+  });
+
+  app.post('/api/users/report', (req, res) => {
+    const { profileId, matchId, reason, details, blockUser } = req.body as {
+      profileId?: string;
+      matchId?: string | null;
+      reason?: string;
+      details?: string;
+      blockUser?: boolean;
+    };
+    if (!profileId || !profileId.trim()) {
+      res.status(400).json({ error: 'Mangler bruker-ID for rapportering' });
+      return;
+    }
+    if (!reason || !reason.trim()) {
+      res.status(400).json({ error: 'Mangler årsak for rapportering' });
+      return;
+    }
+    const result = handleReportUser({
+      profileId,
+      matchId,
+      reason,
+      details,
+      blockUser,
+    });
+    res.json({ ok: true, report: result.report, state: result.state });
   });
 
   app.post('/api/verify', (req, res) => {
@@ -1113,6 +1721,7 @@ async function startServer() {
       bio,
       interests,
       photos,
+      readReceiptsEnabled,
     } = req.body as Partial<CurrentUser>;
 
     if (typeof name === 'string' && name.trim()) {
@@ -1154,6 +1763,9 @@ async function startServer() {
         .map((p) => String(p))
         .filter(Boolean)
         .slice(0, 6);
+    }
+    if (typeof readReceiptsEnabled === 'boolean') {
+      state.currentUser.readReceiptsEnabled = readReceiptsEnabled;
     }
 
     const myStream = state.streams.find((s) => s.id === 'stream-me');
@@ -1277,6 +1889,40 @@ async function startServer() {
             break;
           }
 
+          case 'location:update': {
+            const matchId = String(parsed.payload.matchId || '');
+            const messageId = parsed.payload.messageId
+              ? String(parsed.payload.messageId)
+              : undefined;
+            const latitude = Number(parsed.payload.latitude);
+            const longitude = Number(parsed.payload.longitude);
+            const accuracyMeters =
+              typeof parsed.payload.accuracyMeters === 'number'
+                ? parsed.payload.accuracyMeters
+                : null;
+            if (matchId && Number.isFinite(latitude) && Number.isFinite(longitude)) {
+              handleUpdateLiveLocation({
+                matchId,
+                messageId,
+                latitude,
+                longitude,
+                accuracyMeters,
+              });
+            }
+            break;
+          }
+
+          case 'location:stop': {
+            const matchId = String(parsed.payload.matchId || '');
+            const messageId = parsed.payload.messageId
+              ? String(parsed.payload.messageId)
+              : undefined;
+            if (matchId) {
+              handleStopLiveLocation({ matchId, messageId });
+            }
+            break;
+          }
+
           case 'user:block': {
             const profileId = String(parsed.payload.profileId || '');
             const reason = String(parsed.payload.reason || '');
@@ -1290,6 +1936,26 @@ async function startServer() {
             const profileId = String(parsed.payload.profileId || '');
             if (profileId) {
               handleUnblockUser(profileId);
+            }
+            break;
+          }
+
+          case 'user:report': {
+            const profileId = String(parsed.payload.profileId || '');
+            const matchId = parsed.payload.matchId
+              ? String(parsed.payload.matchId)
+              : null;
+            const reason = String(parsed.payload.reason || '');
+            const details = String(parsed.payload.details || '');
+            const blockUser = Boolean(parsed.payload.blockUser);
+            if (profileId && reason) {
+              handleReportUser({
+                profileId,
+                matchId,
+                reason,
+                details,
+                blockUser,
+              });
             }
             break;
           }
@@ -1374,7 +2040,11 @@ async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        allowedHosts: true,
+        ws: { server: httpServer },
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);

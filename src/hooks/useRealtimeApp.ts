@@ -3,6 +3,7 @@ import { getOrCreateClientId } from './usePushNotifications';
 import type {
   ChatMessage,
   CurrentUser,
+  LiveLocationShare,
   LiveStreamRoom,
   MatchRecord,
   PushToastNotification,
@@ -30,6 +31,7 @@ const INITIAL_FALLBACK_STATE: ServerState = {
     verifiedAt: null,
     verificationPose: null,
     selfieDataUrl: null,
+    readReceiptsEnabled: true,
   },
   swipeStats: {
     rightCount: 5,
@@ -46,6 +48,7 @@ const INITIAL_FALLBACK_STATE: ServerState = {
     },
   ],
   blockedUsers: [],
+  reportedUsers: [],
   likesReceived: [
     {
       profileId: 'henrik',
@@ -67,7 +70,12 @@ const INITIAL_FALLBACK_STATE: ServerState = {
     {
       id: 'match-ingrid',
       profileId: 'ingrid',
-      matchedAt: 'I dag, 19:20',
+      matchedAt: `${new Date().toLocaleDateString('nb-NO', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      })} kl. 19:20`,
+      matchedAtIso: new Date().toISOString(),
       icebreakers: [
         'Hvilken kafé i Oslo lager egentlig byens beste cortado?',
         'Søndagstur i Nordmarka med termos eller lang brunsj på Grünerløkka?',
@@ -79,12 +87,23 @@ const INITIAL_FALLBACK_STATE: ServerState = {
   messagesByMatch: {
     'match-ingrid': [
       {
+        id: 'msg-seed-0',
+        matchId: 'match-ingrid',
+        senderId: 'me',
+        senderName: 'Maja',
+        text: 'Søndagstur i Nordmarka med termos eller lang brunsj på Grünerløkka?',
+        createdAt: '19:21',
+        isIcebreaker: true,
+        readAt: '19:21',
+      },
+      {
         id: 'msg-seed-1',
         matchId: 'match-ingrid',
         senderId: 'ingrid',
         senderName: 'Ingrid',
-        text: 'Hei! Så hyggelig at vi matchet. Håper uken din har startet bra!',
+        text: 'Hei! Så hyggelig at vi matchet — ja takk, gjerne begge deler! Håper uken din har startet bra!',
         createdAt: '19:22',
+        readAt: null,
       },
     ],
   },
@@ -102,10 +121,27 @@ export function useRealtimeApp() {
   );
   const [activePushToast, setActivePushToast] =
     useState<PushToastNotification | null>(null);
+  const [locationRequestingMatchId, setLocationRequestingMatchId] = useState<
+    string | null
+  >(null);
+  const [locationErrorByMatch, setLocationErrorByMatch] = useState<
+    Record<string, string | null>
+  >({});
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<number | null>(null);
   const toastTimerRef = useRef<number | null>(null);
+  const locationWatchersRef = useRef<
+    Record<
+      string,
+      {
+        watchId: number;
+        expiryTimer: number;
+        messageId: string;
+        lastSentAt: number;
+      }
+    >
+  >({});
 
   const fetchServerState = useCallback(async () => {
     try {
@@ -123,6 +159,9 @@ export function useRealtimeApp() {
           blockedUsers: Array.isArray(data.blockedUsers)
             ? data.blockedUsers
             : prev.blockedUsers,
+          reportedUsers: Array.isArray(data.reportedUsers)
+            ? data.reportedUsers
+            : prev.reportedUsers,
         }));
       }
     } catch {
@@ -145,9 +184,15 @@ export function useRealtimeApp() {
       wsRef.current = socket;
 
       socket.onopen = () => {
-        if (!unmounted) {
-          setWsConnected(true);
+        if (unmounted) {
+          socket.close();
+          return;
         }
+        setWsConnected(true);
+      };
+
+      socket.onerror = () => {
+        // Handled via onclose reconnect backoff
       };
 
       socket.onmessage = (evt) => {
@@ -170,6 +215,9 @@ export function useRealtimeApp() {
               blockedUsers: Array.isArray(incoming.blockedUsers)
                 ? incoming.blockedUsers
                 : prev.blockedUsers,
+              reportedUsers: Array.isArray(incoming.reportedUsers)
+                ? incoming.reportedUsers
+                : prev.reportedUsers,
             }));
             setLoading(false);
           } else if (event === 'chat:message') {
@@ -179,12 +227,71 @@ export function useRealtimeApp() {
             };
             setServerState((prev) => {
               const existing = prev.messagesByMatch[matchId] || [];
-              if (existing.some((m) => m.id === message.id)) return prev;
+              if (existing.some((m) => m.id === message.id)) {
+                return {
+                  ...prev,
+                  messagesByMatch: {
+                    ...prev.messagesByMatch,
+                    [matchId]: existing.map((m) =>
+                      m.id === message.id ? { ...m, ...message } : m
+                    ),
+                  },
+                };
+              }
               return {
                 ...prev,
                 messagesByMatch: {
                   ...prev.messagesByMatch,
                   [matchId]: [...existing, message],
+                },
+              };
+            });
+          } else if (event === 'chat:read') {
+            const { matchId, readAt, messageIds } = payload as {
+              matchId: string;
+              readAt: string;
+              messageIds: string[];
+            };
+            const idSet = new Set(messageIds);
+            setServerState((prev) => {
+              const existing = prev.messagesByMatch[matchId];
+              if (!existing) return prev;
+              return {
+                ...prev,
+                messagesByMatch: {
+                  ...prev.messagesByMatch,
+                  [matchId]: existing.map((m) =>
+                    idSet.has(m.id) ? { ...m, readAt } : m
+                  ),
+                },
+              };
+            });
+          } else if (event === 'location:updated') {
+            const { matchId, messageId, liveLocation } = payload as {
+              matchId: string;
+              messageId: string;
+              liveLocation: LiveLocationShare;
+            };
+            if (!liveLocation.isActive) {
+              const watcher = locationWatchersRef.current[matchId];
+              if (watcher && watcher.messageId === messageId) {
+                if ('geolocation' in navigator && navigator.geolocation) {
+                  navigator.geolocation.clearWatch(watcher.watchId);
+                }
+                clearTimeout(watcher.expiryTimer);
+                delete locationWatchersRef.current[matchId];
+              }
+            }
+            setServerState((prev) => {
+              const existing = prev.messagesByMatch[matchId];
+              if (!existing) return prev;
+              return {
+                ...prev,
+                messagesByMatch: {
+                  ...prev.messagesByMatch,
+                  [matchId]: existing.map((m) =>
+                    m.id === messageId ? { ...m, liveLocation } : m
+                  ),
                 },
               };
             });
@@ -256,7 +363,19 @@ export function useRealtimeApp() {
       if (toastTimerRef.current) {
         clearTimeout(toastTimerRef.current);
       }
-      wsRef.current?.close();
+      for (const watcher of Object.values(locationWatchersRef.current)) {
+        if ('geolocation' in navigator && navigator.geolocation) {
+          navigator.geolocation.clearWatch(watcher.watchId);
+        }
+        clearTimeout(watcher.expiryTimer);
+      }
+      locationWatchersRef.current = {};
+      if (
+        wsRef.current &&
+        wsRef.current.readyState === WebSocket.OPEN
+      ) {
+        wsRef.current.close();
+      }
     };
   }, [fetchServerState]);
 
@@ -374,6 +493,7 @@ export function useRealtimeApp() {
         text: trimmed,
         createdAt: nowTime,
         isIcebreaker,
+        readAt: null,
       };
 
       setServerState((prev) => {
@@ -414,6 +534,338 @@ export function useRealtimeApp() {
       }
     },
     [serverState.currentUser.id, serverState.currentUser.name]
+  );
+
+  const clearLocationWatcherForMatch = useCallback((matchId: string) => {
+    const existingWatcher = locationWatchersRef.current[matchId];
+    if (existingWatcher) {
+      if ('geolocation' in navigator && navigator.geolocation) {
+        navigator.geolocation.clearWatch(existingWatcher.watchId);
+      }
+      clearTimeout(existingWatcher.expiryTimer);
+      delete locationWatchersRef.current[matchId];
+    }
+  }, []);
+
+  const clearLocationError = useCallback((matchId: string) => {
+    setLocationErrorByMatch((prev) => ({ ...prev, [matchId]: null }));
+  }, []);
+
+  const stopLiveLocation = useCallback(
+    async (matchId: string, messageId?: string) => {
+      clearLocationWatcherForMatch(matchId);
+      const nowIso = new Date().toISOString();
+
+      setServerState((prev) => {
+        const thread = prev.messagesByMatch[matchId];
+        if (!thread) return prev;
+        return {
+          ...prev,
+          messagesByMatch: {
+            ...prev.messagesByMatch,
+            [matchId]: thread.map((msg) => {
+              if (!msg.liveLocation || !msg.liveLocation.isActive) return msg;
+              if (messageId && msg.id !== messageId) return msg;
+              if (!messageId && msg.senderId !== prev.currentUser.id) return msg;
+              return {
+                ...msg,
+                liveLocation: {
+                  ...msg.liveLocation,
+                  isActive: false,
+                  stoppedAtIso: nowIso,
+                  updatedAtIso: nowIso,
+                },
+              };
+            }),
+          },
+        };
+      });
+
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(
+          JSON.stringify({
+            event: 'location:stop',
+            payload: { matchId, messageId },
+          })
+        );
+      } else {
+        try {
+          await fetch(
+            `/api/matches/${encodeURIComponent(matchId)}/live-location/stop`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ messageId }),
+            }
+          );
+        } catch {
+          // Offline mode keeps local stopped state
+        }
+      }
+    },
+    [clearLocationWatcherForMatch]
+  );
+
+  const startLiveLocation = useCallback(
+    async (matchId: string): Promise<boolean> => {
+      if (
+        typeof navigator === 'undefined' ||
+        !('geolocation' in navigator) ||
+        !navigator.geolocation
+      ) {
+        setLocationErrorByMatch((prev) => ({
+          ...prev,
+          [matchId]:
+            'Nettleseren din støtter ikke Geolocation API for deling av live-posisjon.',
+        }));
+        return false;
+      }
+
+      setLocationErrorByMatch((prev) => ({ ...prev, [matchId]: null }));
+      setLocationRequestingMatchId(matchId);
+
+      const getInitialPosition = (): Promise<GeolocationPosition> =>
+        new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(
+            resolve,
+            (firstErr) => {
+              if (firstErr.code === 3) {
+                // Retry once with standard accuracy if high-accuracy GPS timed out indoors
+                navigator.geolocation.getCurrentPosition(resolve, reject, {
+                  enableHighAccuracy: false,
+                  timeout: 10000,
+                  maximumAge: 30000,
+                });
+              } else {
+                reject(firstErr);
+              }
+            },
+            {
+              enableHighAccuracy: true,
+              timeout: 10000,
+              maximumAge: 10000,
+            }
+          );
+        });
+
+      let position: GeolocationPosition;
+      try {
+        position = await getInitialPosition();
+      } catch (err: unknown) {
+        const geoErr = err as { code?: number };
+        let errorMsg =
+          'Kunne ikke hente nåværende posisjon. Kontroller at posisjonstjenester er påslått.';
+        if (geoErr?.code === 1) {
+          errorMsg =
+            'Tilgang til posisjon ble avslått. Tillat posisjonstilgang i nettleseren for å dele live-posisjon i 30 minutter.';
+        } else if (geoErr?.code === 2) {
+          errorMsg =
+            'Posisjonen din er ikke tilgjengelig akkurat nå. Sjekk GPS- eller nettverksdekning.';
+        } else if (geoErr?.code === 3) {
+          errorMsg =
+            'Tidsavbrudd ved innhenting av posisjon. Prøv igjen et sted med bedre dekning.';
+        }
+        setLocationErrorByMatch((prev) => ({
+          ...prev,
+          [matchId]: errorMsg,
+        }));
+        setLocationRequestingMatchId((curr) =>
+          curr === matchId ? null : curr
+        );
+        return false;
+      }
+
+      clearLocationWatcherForMatch(matchId);
+
+      const latitude = Number(position.coords.latitude.toFixed(6));
+      const longitude = Number(position.coords.longitude.toFixed(6));
+      const accuracyMeters =
+        typeof position.coords.accuracy === 'number' &&
+        Number.isFinite(position.coords.accuracy)
+          ? Math.round(position.coords.accuracy)
+          : null;
+
+      const messageId = `loc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      const clientId = getOrCreateClientId();
+      const now = new Date();
+      const nowIso = now.toISOString();
+      const durationMs = 30 * 60 * 1000;
+      let expiresAtIso = new Date(now.getTime() + durationMs).toISOString();
+
+      try {
+        const res = await fetch(
+          `/api/matches/${encodeURIComponent(matchId)}/live-location/start`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id: messageId,
+              latitude,
+              longitude,
+              accuracyMeters,
+              clientId,
+            }),
+          }
+        );
+
+        if (res.ok) {
+          const data = (await res.json()) as {
+            message?: ChatMessage;
+            state?: ServerState;
+          };
+          if (data.state) {
+            setServerState(data.state);
+          }
+          if (data.message?.liveLocation?.expiresAtIso) {
+            expiresAtIso = data.message.liveLocation.expiresAtIso;
+          }
+        }
+      } catch {
+        // Offline fallback: insert optimistic 30-min live location message
+        const nowTime = now.toLocaleTimeString('nb-NO', {
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+        const fallbackMsg: ChatMessage = {
+          id: messageId,
+          matchId,
+          senderId: serverState.currentUser.id,
+          senderName: serverState.currentUser.name,
+          text: 'Deler live-posisjon i 30 minutter',
+          createdAt: nowTime,
+          readAt: null,
+          liveLocation: {
+            latitude,
+            longitude,
+            accuracyMeters,
+            startedAtIso: nowIso,
+            expiresAtIso,
+            updatedAtIso: nowIso,
+            stoppedAtIso: null,
+            isActive: true,
+          },
+        };
+        setServerState((prev) => {
+          const existing = prev.messagesByMatch[matchId] || [];
+          return {
+            ...prev,
+            messagesByMatch: {
+              ...prev.messagesByMatch,
+              [matchId]: [...existing, fallbackMsg],
+            },
+          };
+        });
+      } finally {
+        setLocationRequestingMatchId((curr) =>
+          curr === matchId ? null : curr
+        );
+      }
+
+      const remainingMs = Math.max(
+        1000,
+        Date.parse(expiresAtIso) - Date.now()
+      );
+
+      const watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          const watcherEntry = locationWatchersRef.current[matchId];
+          if (!watcherEntry) return;
+          const nowTick = Date.now();
+          if (nowTick - watcherEntry.lastSentAt < 4000) return;
+          watcherEntry.lastSentAt = nowTick;
+
+          const nextLat = Number(pos.coords.latitude.toFixed(6));
+          const nextLng = Number(pos.coords.longitude.toFixed(6));
+          const nextAcc =
+            typeof pos.coords.accuracy === 'number' &&
+            Number.isFinite(pos.coords.accuracy)
+              ? Math.round(pos.coords.accuracy)
+              : null;
+          const updatedIso = new Date(nowTick).toISOString();
+
+          setServerState((prev) => {
+            const thread = prev.messagesByMatch[matchId];
+            if (!thread) return prev;
+            return {
+              ...prev,
+              messagesByMatch: {
+                ...prev.messagesByMatch,
+                [matchId]: thread.map((m) =>
+                  m.id === messageId && m.liveLocation?.isActive
+                    ? {
+                        ...m,
+                        liveLocation: {
+                          ...m.liveLocation,
+                          latitude: nextLat,
+                          longitude: nextLng,
+                          accuracyMeters: nextAcc,
+                          updatedAtIso: updatedIso,
+                        },
+                      }
+                    : m
+                ),
+              },
+            };
+          });
+
+          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            wsRef.current.send(
+              JSON.stringify({
+                event: 'location:update',
+                payload: {
+                  matchId,
+                  messageId,
+                  latitude: nextLat,
+                  longitude: nextLng,
+                  accuracyMeters: nextAcc,
+                },
+              })
+            );
+          } else {
+            void fetch(
+              `/api/matches/${encodeURIComponent(matchId)}/live-location/update`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  messageId,
+                  latitude: nextLat,
+                  longitude: nextLng,
+                  accuracyMeters: nextAcc,
+                }),
+              }
+            ).catch(() => {});
+          }
+        },
+        () => {
+          // Transient watch error does not abort existing 30-min share prematurely
+        },
+        {
+          enableHighAccuracy: true,
+          maximumAge: 8000,
+          timeout: 15000,
+        }
+      );
+
+      const expiryTimer = window.setTimeout(() => {
+        void stopLiveLocation(matchId, messageId);
+      }, remainingMs);
+
+      locationWatchersRef.current[matchId] = {
+        watchId,
+        expiryTimer,
+        messageId,
+        lastSentAt: Date.now(),
+      };
+
+      return true;
+    },
+    [
+      clearLocationWatcherForMatch,
+      serverState.currentUser.id,
+      serverState.currentUser.name,
+      stopLiveLocation,
+    ]
   );
 
   const verifyProfile = useCallback(async (pose: string, selfieDataUrl: string) => {
@@ -624,6 +1076,7 @@ export function useRealtimeApp() {
         minute: '2-digit',
       });
 
+      clearLocationWatcherForMatch(`match-${cleanId}`);
       setCelebratingMatch((prev) =>
         prev?.profileId === cleanId ? null : prev
       );
@@ -677,7 +1130,7 @@ export function useRealtimeApp() {
       }
       return false;
     },
-    []
+    [clearLocationWatcherForMatch]
   );
 
   const unblockUser = useCallback(async (profileId: string) => {
@@ -706,6 +1159,100 @@ export function useRealtimeApp() {
     }
   }, []);
 
+  const reportUser = useCallback(
+    async (payload: {
+      profileId: string;
+      matchId?: string | null;
+      reason: string;
+      details?: string;
+      blockUser?: boolean;
+    }) => {
+      const cleanId = payload.profileId.trim();
+      if (!cleanId) return false;
+
+      if (payload.blockUser) {
+        clearLocationWatcherForMatch(`match-${cleanId}`);
+        if (payload.matchId) {
+          clearLocationWatcherForMatch(payload.matchId);
+        }
+        setCelebratingMatch((prev) =>
+          prev?.profileId === cleanId ? null : prev
+        );
+      }
+
+      const optimisticReport = {
+        id: `rep-${Date.now()}`,
+        profileId: cleanId,
+        matchId: payload.matchId || null,
+        reason: payload.reason,
+        details: payload.details || '',
+        alsoBlocked: Boolean(payload.blockUser),
+        reportedAt: new Date().toLocaleDateString('nb-NO', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
+        }),
+      };
+
+      setServerState((prev) => {
+        if (!payload.blockUser) {
+          return {
+            ...prev,
+            reportedUsers: [optimisticReport, ...prev.reportedUsers],
+          };
+        }
+
+        const nowTime = new Date().toLocaleTimeString('nb-NO', {
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+        const removedMatchIds = prev.matches
+          .filter((m) => m.profileId === cleanId)
+          .map((m) => m.id);
+        const nextMessages = { ...prev.messagesByMatch };
+        for (const mId of removedMatchIds) {
+          delete nextMessages[mId];
+        }
+        delete nextMessages[`match-${cleanId}`];
+
+        return {
+          ...prev,
+          reportedUsers: [optimisticReport, ...prev.reportedUsers],
+          blockedUsers: [
+            {
+              profileId: cleanId,
+              blockedAt: `I dag, ${nowTime}`,
+              reason: `Rapportert: ${payload.reason}`,
+            },
+            ...prev.blockedUsers.filter((b) => b.profileId !== cleanId),
+          ],
+          matches: prev.matches.filter((m) => m.profileId !== cleanId),
+          messagesByMatch: nextMessages,
+          likesReceived: prev.likesReceived.filter(
+            (l) => l.profileId !== cleanId
+          ),
+        };
+      });
+
+      try {
+        const res = await fetch('/api/users/report', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (res.ok) {
+          const data = (await res.json()) as { state: ServerState };
+          setServerState(data.state);
+          return true;
+        }
+      } catch {
+        return true;
+      }
+      return false;
+    },
+    [clearLocationWatcherForMatch]
+  );
+
   return {
     serverState,
     loading,
@@ -718,6 +1265,11 @@ export function useRealtimeApp() {
     rewindSwipe,
     markMatchRead,
     sendMessage,
+    startLiveLocation,
+    stopLiveLocation,
+    locationRequestingMatchId,
+    locationErrorByMatch,
+    clearLocationError,
     verifyProfile,
     updateProfile,
     saveVideoIntro,
@@ -728,6 +1280,7 @@ export function useRealtimeApp() {
     moderateStream,
     blockUser,
     unblockUser,
+    reportUser,
   };
 }
 

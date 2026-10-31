@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Check,
   Heart,
@@ -6,6 +6,7 @@ import {
   RotateCcw,
   Search,
   SlidersHorizontal,
+  Sparkles,
   X,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -21,6 +22,7 @@ import type {
   RelationshipGoal,
 } from '../types';
 import { SafeImage, VerifiedBadge } from './CommonUI';
+import { normalizeInterestKey } from './InterestBadges';
 
 type QuickStatusFilter = 'all' | 'online' | 'new' | 'verified';
 type SortMode = 'recommended' | 'nearest' | 'ageAsc';
@@ -29,6 +31,8 @@ interface DiscoverViewProps {
   profiles: DatingProfile[];
   matches: MatchRecord[];
   swipedRightIds: string[];
+  viewerInterests: string[];
+  externalInterestFilter?: { interest: string; nonce: number } | null;
   onSelectProfile: (profile: DatingProfile) => void;
   onQuickLike: (profileId: string) => void;
   onOpenChat: (matchId: string) => void;
@@ -45,6 +49,8 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
   profiles,
   matches,
   swipedRightIds,
+  viewerInterests,
+  externalInterestFilter,
   onSelectProfile,
   onQuickLike,
   onOpenChat,
@@ -68,6 +74,44 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
   );
   const [onlyVerified, setOnlyVerified] = useState<boolean>(false);
   const [sortMode, setSortMode] = useState<SortMode>('recommended');
+
+  useEffect(() => {
+    if (!externalInterestFilter?.interest) return;
+    setSearchQuery('');
+    setStatusFilter('all');
+    setMinAge(18);
+    setMaxAge(45);
+    setSelectedCity('Alle byer');
+    setMaxDistanceKm(null);
+    setSelectedEducation('Alle');
+    setSelectedGoal('Alle');
+    setOnlyVerified(false);
+    setSelectedInterests([externalInterestFilter.interest]);
+    setFilterDrawerOpen(false);
+  }, [externalInterestFilter]);
+
+  const viewerInterestSet = useMemo(
+    () => new Set(viewerInterests.map(normalizeInterestKey)),
+    [viewerInterests]
+  );
+
+  const availableInterests = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const opt of INTEREST_OPTIONS) {
+      map.set(normalizeInterestKey(opt), opt);
+    }
+    for (const p of profiles) {
+      for (const item of p.interests) {
+        const key = normalizeInterestKey(item);
+        if (!map.has(key)) map.set(key, item);
+      }
+    }
+    for (const sel of selectedInterests) {
+      const key = normalizeInterestKey(sel);
+      if (!map.has(key)) map.set(key, sel);
+    }
+    return Array.from(map.values());
+  }, [profiles, selectedInterests]);
 
   const cities = useMemo(() => {
     const unique = Array.from(new Set(profiles.map((p) => p.city)));
@@ -213,10 +257,10 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
       {/* Header Row */}
       <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mb-5">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-900">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
             Utforsk i nærheten
           </h1>
-          <p className="text-sm text-zinc-500 mt-1">
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
             Målrettet søk etter alder, lokasjon, interesser, utdanning og preferanser
           </p>
         </div>
@@ -224,20 +268,20 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
         {/* Search Input + Filter Menu Trigger */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full lg:w-auto">
           <div className="relative flex-1 sm:w-72">
-            <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <Search className="w-4 h-4 text-zinc-400 dark:text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="search"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Søk etter interesse, by, yrke..."
               aria-label="Søk i profiler"
-              className="w-full min-h-[44px] pl-10 pr-9 rounded-xl border border-zinc-200 bg-white text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-zinc-900"
+              className="w-full min-h-[44px] pl-10 pr-9 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-300"
             />
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => setSearchQuery('')}
-                className="absolute right-1.5 top-1/2 -translate-y-1/2 min-h-[36px] min-w-[36px] flex items-center justify-center text-zinc-400 hover:text-zinc-800"
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 min-h-[36px] min-w-[36px] flex items-center justify-center text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"
                 aria-label="Tøm søk"
               >
                 <X className="w-4 h-4" />
@@ -251,8 +295,8 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
             aria-expanded={filterDrawerOpen}
             className={`min-h-[44px] px-4 py-2 rounded-xl text-sm font-semibold inline-flex items-center justify-center gap-2 transition whitespace-nowrap shrink-0 ${
               filterDrawerOpen || activeAdvancedFilterCount > 0
-                ? 'bg-zinc-900 text-white hover:bg-zinc-800'
-                : 'border border-zinc-200 bg-white text-zinc-800 hover:bg-zinc-50'
+                ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-white'
+                : 'border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-100 hover:bg-zinc-50 dark:hover:bg-zinc-800'
             }`}
           >
             <SlidersHorizontal className="w-4 h-4" />
@@ -272,7 +316,7 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
           <div
             role="tablist"
             aria-label="Hurtigfilter"
-            className="inline-flex items-center p-1 rounded-xl bg-zinc-200/70 shrink-0"
+            className="inline-flex items-center p-1 rounded-xl bg-zinc-200/70 dark:bg-zinc-800 shrink-0"
           >
             {quickTabs.map((btn) => {
               const active = statusFilter === btn.id;
@@ -285,8 +329,8 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
                   onClick={() => setStatusFilter(btn.id)}
                   className={`min-h-[38px] px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors whitespace-nowrap shrink-0 ${
                     active
-                      ? 'bg-white text-zinc-900 shadow-xs'
-                      : 'text-zinc-600 hover:text-zinc-900'
+                      ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50 shadow-xs'
+                      : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
                   }`}
                 >
                   {btn.label}
@@ -297,24 +341,24 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
         </div>
 
         {/* Sort Selector & Live Dynamic Count */}
-        <div className="flex items-center gap-3 text-xs sm:text-sm text-zinc-600">
+        <div className="flex items-center gap-3 text-xs sm:text-sm text-zinc-600 dark:text-zinc-400">
           <span className="tabular-nums">
-            Viser <strong>{filteredProfiles.length}</strong> av{' '}
+            Viser <strong className="text-zinc-900 dark:text-zinc-100">{filteredProfiles.length}</strong> av{' '}
             {profiles.length} profiler
           </span>
-          <span aria-hidden="true" className="text-zinc-300">
+          <span aria-hidden="true" className="text-zinc-300 dark:text-zinc-700">
             ·
           </span>
           <label className="inline-flex items-center gap-1.5">
-            <span className="text-zinc-500 hidden sm:inline">Sorter:</span>
+            <span className="text-zinc-500 dark:text-zinc-400 hidden sm:inline">Sorter:</span>
             <select
               value={sortMode}
               onChange={(e) => setSortMode(e.target.value as SortMode)}
-              className="min-h-[38px] bg-transparent font-medium text-zinc-800 focus:outline-none cursor-pointer"
+              className="min-h-[38px] bg-transparent font-medium text-zinc-800 dark:text-zinc-200 focus:outline-none cursor-pointer"
             >
-              <option value="recommended">Anbefalt</option>
-              <option value="nearest">Nærmest meg</option>
-              <option value="ageAsc">Alder (lav–høy)</option>
+              <option value="recommended" className="bg-white dark:bg-zinc-900">Anbefalt</option>
+              <option value="nearest" className="bg-white dark:bg-zinc-900">Nærmest meg</option>
+              <option value="ageAsc" className="bg-white dark:bg-zinc-900">Alder (lav–høy)</option>
             </select>
           </label>
         </div>
@@ -328,21 +372,21 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
-            className="mb-6 rounded-3xl bg-white border border-zinc-200 p-5 sm:p-7 shadow-sm space-y-6"
+            className="mb-6 rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5 sm:p-7 shadow-sm space-y-6"
           >
-          <div className="flex items-center justify-between gap-4 pb-4 border-b border-zinc-100">
+          <div className="flex items-center justify-between gap-4 pb-4 border-b border-zinc-100 dark:border-zinc-800">
             <div>
-              <h2 className="text-base sm:text-lg font-bold text-zinc-900">
+              <h2 className="text-base sm:text-lg font-bold text-zinc-900 dark:text-zinc-50">
                 Avanserte søkefiltre
               </h2>
-              <p className="text-xs text-zinc-500 mt-0.5">
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
                 Resultatene i rutenettet oppdateres dynamisk mens du velger kriterier
               </p>
             </div>
             <button
               type="button"
               onClick={() => setFilterDrawerOpen(false)}
-              className="min-h-[44px] min-w-[44px] -mr-2 flex items-center justify-center text-zinc-400 hover:text-zinc-900"
+              className="min-h-[44px] min-w-[44px] -mr-2 flex items-center justify-center text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
               aria-label="Skjul filterpanel"
             >
               <X className="w-5 h-5" />
@@ -353,17 +397,17 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
             {/* 1. Age Range Filter */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <label className="text-xs font-semibold text-zinc-700">
+                <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
                   Aldersspenn
                 </label>
-                <span className="text-xs font-semibold text-zinc-900 tabular-nums">
+                <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 tabular-nums">
                   {minAge} – {maxAge} år
                 </span>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <span className="block text-[11px] text-zinc-500 mb-1">
+                  <span className="block text-[11px] text-zinc-500 dark:text-zinc-400 mb-1">
                     Fra alder
                   </span>
                   <input
@@ -379,7 +423,7 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
                   />
                 </div>
                 <div>
-                  <span className="block text-[11px] text-zinc-500 mb-1">
+                  <span className="block text-[11px] text-zinc-500 dark:text-zinc-400 mb-1">
                     Til alder
                   </span>
                   <input
@@ -399,7 +443,7 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
 
             {/* 2. Location & Max Distance Filter */}
             <div className="space-y-3">
-              <label className="block text-xs font-semibold text-zinc-700">
+              <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300">
                 Lokasjon og maks avstand
               </label>
               <div className="grid grid-cols-2 gap-2.5">
@@ -407,7 +451,7 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
                   value={selectedCity}
                   onChange={(e) => setSelectedCity(e.target.value)}
                   aria-label="Velg by"
-                  className="min-h-[44px] px-3 rounded-xl border border-zinc-200 bg-zinc-50 text-sm text-zinc-900 focus:outline-none focus:border-zinc-900"
+                  className="min-h-[44px] px-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/80 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-300"
                 >
                   {cities.map((city) => (
                     <option key={city} value={city}>
@@ -424,7 +468,7 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
                     )
                   }
                   aria-label="Maks avstand"
-                  className="min-h-[44px] px-3 rounded-xl border border-zinc-200 bg-zinc-50 text-sm text-zinc-900 focus:outline-none focus:border-zinc-900"
+                  className="min-h-[44px] px-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/80 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-300"
                 >
                   {MAX_DISTANCE_OPTIONS.map((opt) => (
                     <option
@@ -440,7 +484,7 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
 
             {/* 3. Education Level & Relationship Goal */}
             <div className="space-y-3">
-              <label className="block text-xs font-semibold text-zinc-700">
+              <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300">
                 Utdanningsnivå og relasjonsmål
               </label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -452,7 +496,7 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
                     )
                   }
                   aria-label="Utdanningsnivå"
-                  className="min-h-[44px] px-3 rounded-xl border border-zinc-200 bg-zinc-50 text-sm text-zinc-900 focus:outline-none focus:border-zinc-900"
+                  className="min-h-[44px] px-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/80 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-300"
                 >
                   <option value="Alle">Alle utdanninger</option>
                   {EDUCATION_OPTIONS.map((edu) => (
@@ -468,7 +512,7 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
                     setSelectedGoal(e.target.value as RelationshipGoal | 'Alle')
                   }
                   aria-label="Relasjonsmål"
-                  className="min-h-[44px] px-3 rounded-xl border border-zinc-200 bg-zinc-50 text-sm text-zinc-900 focus:outline-none focus:border-zinc-900"
+                  className="min-h-[44px] px-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/80 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-300"
                 >
                   <option value="Alle">Alle relasjonsmål</option>
                   {RELATIONSHIP_GOAL_OPTIONS.map((goal) => (
@@ -482,16 +526,16 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
           </div>
 
           {/* 4. Specific Interests Multi-Select */}
-          <div className="pt-2 border-t border-zinc-100">
+          <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800">
             <div className="flex items-center justify-between mb-2.5">
-              <span className="text-xs font-semibold text-zinc-700">
+              <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
                 Spesifikke interesser (velg én eller flere)
               </span>
               {selectedInterests.length > 0 && (
                 <button
                   type="button"
                   onClick={() => setSelectedInterests([])}
-                  className="text-xs font-medium text-rose-600 hover:text-rose-700"
+                  className="text-xs font-medium text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300"
                 >
                   Tøm interesser
                 </button>
@@ -499,7 +543,7 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
             </div>
 
             <div className="flex flex-wrap gap-2">
-              {INTEREST_OPTIONS.map((interest) => {
+              {availableInterests.map((interest) => {
                 const isSelected = selectedInterests.includes(interest);
                 return (
                   <button
@@ -510,7 +554,7 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
                     className={`min-h-[40px] px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium inline-flex items-center gap-1.5 transition whitespace-nowrap shrink-0 ${
                       isSelected
                         ? 'bg-rose-600 text-white'
-                        : 'border border-zinc-200 bg-zinc-50 text-zinc-700 hover:bg-zinc-100'
+                        : 'border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/70 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'
                     }`}
                   >
                     {isSelected && <Check className="w-3.5 h-3.5" />}
@@ -522,7 +566,7 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
           </div>
 
           {/* Bottom Filter Actions */}
-          <div className="pt-4 border-t border-zinc-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <label className="inline-flex items-center gap-2.5 cursor-pointer select-none min-h-[44px]">
               <input
                 type="checkbox"
@@ -530,7 +574,7 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
                 onChange={(e) => setOnlyVerified(e.target.checked)}
                 className="w-4 h-4 rounded accent-sky-600"
               />
-              <span className="text-sm text-zinc-700 font-medium">
+              <span className="text-sm text-zinc-700 dark:text-zinc-300 font-medium">
                 Vis kun selfie-verifiserte profiler
               </span>
             </label>
@@ -539,7 +583,7 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
               <button
                 type="button"
                 onClick={resetAllFilters}
-                className="min-h-[44px] px-4 py-2 rounded-xl border border-zinc-200 text-xs sm:text-sm font-medium text-zinc-700 hover:bg-zinc-50 inline-flex items-center gap-1.5 transition whitespace-nowrap"
+                className="min-h-[44px] px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 text-xs sm:text-sm font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 inline-flex items-center gap-1.5 transition whitespace-nowrap"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 <span>Nullstill filtre</span>
@@ -548,7 +592,7 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
               <button
                 type="button"
                 onClick={() => setFilterDrawerOpen(false)}
-                className="flex-1 sm:flex-initial min-h-[44px] px-5 py-2 rounded-xl bg-zinc-900 text-white text-xs sm:text-sm font-semibold hover:bg-zinc-800 transition whitespace-nowrap tabular-nums"
+                className="flex-1 sm:flex-initial min-h-[44px] px-5 py-2 rounded-xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs sm:text-sm font-semibold hover:bg-zinc-800 dark:hover:bg-white transition whitespace-nowrap tabular-nums"
               >
                 Vis {filteredProfiles.length} treff
               </button>
@@ -560,9 +604,9 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
 
       {/* Active Filter Summary Line */}
       {hasAnyActiveFilter && !filterDrawerOpen && (
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-zinc-200/70 text-xs text-zinc-600">
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-zinc-200/70 dark:border-zinc-800 text-xs text-zinc-600 dark:text-zinc-400">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span className="font-semibold text-zinc-900">Aktive filtre:</span>
+            <span className="font-semibold text-zinc-900 dark:text-zinc-100">Aktive filtre:</span>
             {(minAge !== 18 || maxAge !== 40) && (
               <span>
                 Alder {minAge}–{maxAge} år
@@ -586,7 +630,7 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
           <button
             type="button"
             onClick={resetAllFilters}
-            className="min-h-[36px] font-semibold text-rose-600 hover:text-rose-700 whitespace-nowrap"
+            className="min-h-[36px] font-semibold text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 whitespace-nowrap"
           >
             Nullstill alle
           </button>
@@ -595,17 +639,17 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
 
       {/* Responsive Profile Grid */}
       {filteredProfiles.length === 0 ? (
-        <div className="rounded-3xl border border-zinc-200 bg-white p-10 text-center">
-          <p className="text-base font-semibold text-zinc-900">
+        <div className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-10 text-center">
+          <p className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
             Ingen profiler matcher akkurat denne kombinasjonen av filtre
           </p>
-          <p className="text-sm text-zinc-500 mt-1">
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
             Prøv å utvide aldersspennet, fjerne en interesse eller velge alle byer.
           </p>
           <button
             type="button"
             onClick={resetAllFilters}
-            className="mt-5 min-h-[44px] px-5 py-2.5 rounded-xl bg-zinc-900 text-white text-sm font-medium hover:bg-zinc-800 transition whitespace-nowrap"
+            className="mt-5 min-h-[44px] px-5 py-2.5 rounded-xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-sm font-medium hover:bg-zinc-800 dark:hover:bg-white transition whitespace-nowrap"
           >
             Tilbakestill alle søkefiltre
           </button>
@@ -625,7 +669,7 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.96 }}
                   transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
-                  className="group relative rounded-2xl sm:rounded-3xl overflow-hidden bg-zinc-100 aspect-[3/4] shadow-xs border border-zinc-200/70"
+                  className="group relative rounded-2xl sm:rounded-3xl overflow-hidden bg-zinc-100 dark:bg-zinc-900 aspect-[3/4] shadow-xs border border-zinc-200/70 dark:border-zinc-800"
                 >
                 <button
                   type="button"
@@ -690,8 +734,18 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
                       <span className="truncate">{profile.education}</span>
                     </div>
 
-                    <div className="mt-1 text-[11px] text-white/70 truncate">
-                      {profile.interests.slice(0, 3).join(' · ')}
+                    <div className="mt-1 text-[11px] text-white/75 truncate flex items-center gap-1">
+                      {profile.interests.some((i) =>
+                        viewerInterestSet.has(normalizeInterestKey(i))
+                      ) && (
+                        <Sparkles
+                          className="w-3 h-3 text-rose-300 shrink-0"
+                          aria-hidden="true"
+                        />
+                      )}
+                      <span className="truncate">
+                        {profile.interests.slice(0, 3).join(' · ')}
+                      </span>
                     </div>
                   </div>
                 </button>
