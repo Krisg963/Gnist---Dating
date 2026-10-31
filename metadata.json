@@ -1,0 +1,6 @@
+{
+  "name": "Gnist — Moderne Dating & Live Møter",
+  "description": "Mobiloptimalisert norsk dating-app (PWA) med utforskerrutenett, berøringsvennlig sveiping, hvem likte deg, sanntids live-strømming, direktemeldinger med icebreakers og selfie-verifisering.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
