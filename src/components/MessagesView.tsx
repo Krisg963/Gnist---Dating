@@ -3,12 +3,14 @@ import {
   AlertCircle,
   ArrowLeft,
   Ban,
+  Calendar,
   Check,
   CheckCheck,
   ChevronDown,
   ChevronUp,
   Clock,
   Flag,
+  Gamepad2,
   Loader2,
   MapPin,
   MessageCircle,
@@ -20,13 +22,25 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import type {
+  ChatGameId,
   ChatMessage,
   CurrentUser,
   DatingProfile,
   MatchRecord,
+  PartnerAvailabilityResponse,
+  ProposedTimeSlot,
 } from '../types';
+import {
+  ChatGameLibraryDrawer,
+  ChatGameMessageCard,
+} from './ChatGameLibraryModule';
 import { SafeImage, VerifiedBadge } from './CommonUI';
 import { LiveLocationMessageCard } from './LiveLocationMessageCard';
+import {
+  CalendarEventConfirmModal,
+  MeetingProposalDrawer,
+  MeetingProposalMessageCard,
+} from './MeetingProposalModule';
 
 interface MessagesViewProps {
   matches: MatchRecord[];
@@ -53,6 +67,34 @@ interface MessagesViewProps {
     icebreakers?: [string, string, string];
     error?: string;
   }>;
+  onFetchPartnerAvailability: (
+    matchId: string
+  ) => Promise<PartnerAvailabilityResponse | null>;
+  onSendMeetingProposal: (params: {
+    matchId: string;
+    slots: ProposedTimeSlot[];
+    userCalendarChecked: boolean;
+    note?: string;
+  }) => Promise<boolean>;
+  onSelectMeetingSlot: (
+    matchId: string,
+    messageId: string,
+    slotId: string
+  ) => Promise<void>;
+  onMarkMeetingCalendarSynced: (params: {
+    matchId: string;
+    messageId: string;
+    eventId: string;
+    htmlLink: string;
+  }) => Promise<void>;
+  onStartChatGame: (matchId: string, gameId: ChatGameId) => Promise<boolean>;
+  onAnswerChatGameRound: (params: {
+    matchId: string;
+    messageId: string;
+    roundIndex: number;
+    choiceIndex: number;
+  }) => Promise<void>;
+  onNextChatGameRound: (matchId: string, messageId: string) => Promise<void>;
   onGoToSwipe: () => void;
 }
 
@@ -108,11 +150,27 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
   onRequestBlockUser,
   onRequestReportUser,
   onGenerateIcebreakers,
+  onFetchPartnerAvailability,
+  onSendMeetingProposal,
+  onSelectMeetingSlot,
+  onMarkMeetingCalendarSynced,
+  onStartChatGame,
+  onAnswerChatGameRound,
+  onNextChatGameRound,
   onGoToSwipe,
 }) => {
   const [draft, setDraft] = useState('');
   const [showIcebreakersDrawer, setShowIcebreakersDrawer] = useState(true);
   const [showLocationPrompt, setShowLocationPrompt] = useState(false);
+  const [showMeetingDrawer, setShowMeetingDrawer] = useState(false);
+  const [showGameLibraryDrawer, setShowGameLibraryDrawer] = useState(false);
+  const [pendingCalendarConfirm, setPendingCalendarConfirm] = useState<{
+    matchId: string;
+    messageId: string;
+    slot: ProposedTimeSlot;
+    partnerName: string;
+    partnerCity: string;
+  } | null>(null);
   const [generatingMatchId, setGeneratingMatchId] = useState<string | null>(
     null
   );
@@ -165,6 +223,8 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
 
   useEffect(() => {
     setShowLocationPrompt(false);
+    setShowMeetingDrawer(false);
+    setShowGameLibraryDrawer(false);
   }, [activeMatch?.id]);
 
   const activeMyLiveLocationMsg = useMemo(() => {
@@ -396,6 +456,25 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                                   : 'Live-posisjon avsluttet'}
                               </span>
                             </span>
+                          ) : lastMsg.meetingProposal ? (
+                            <span className="truncate inline-flex items-center gap-1">
+                              <Calendar className="w-3 h-3 text-rose-600 dark:text-rose-400 shrink-0" />
+                              <span className="truncate">
+                                {lastMsg.senderId === currentUser.id
+                                  ? 'Du: '
+                                  : ''}
+                                {lastMsg.meetingProposal.selectedSlotId
+                                  ? 'Møtetidspunkt bekreftet'
+                                  : 'Foreslo 3 møtetidspunkter'}
+                              </span>
+                            </span>
+                          ) : lastMsg.gameSession ? (
+                            <span className="truncate inline-flex items-center gap-1">
+                              <Gamepad2 className="w-3 h-3 text-rose-600 dark:text-rose-400 shrink-0" />
+                              <span className="truncate">
+                                Spill: {lastMsg.gameSession.gameTitle}
+                              </span>
+                            </span>
                           ) : (
                             <span className="truncate">
                               {lastMsg.senderId === currentUser.id ? 'Du: ' : ''}
@@ -478,34 +557,37 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                 <button
                   type="button"
                   onClick={() => {
-                    if (activeMyLiveLocationMsg) {
-                      void onStopLiveLocation(
-                        activeMatch.id,
-                        activeMyLiveLocationMsg.id
-                      );
-                    } else {
-                      setShowLocationPrompt((v) => !v);
-                    }
+                    setShowLocationPrompt(false);
+                    setShowGameLibraryDrawer(false);
+                    setShowMeetingDrawer((v) => !v);
                   }}
                   className={`min-h-[40px] px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-medium inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 transition ${
-                    activeMyLiveLocationMsg
-                      ? 'border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-200 hover:bg-emerald-100 dark:hover:bg-emerald-950/80'
-                      : showLocationPrompt
-                        ? 'border-zinc-900 dark:border-zinc-100 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900'
-                        : 'border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800'
+                    showMeetingDrawer
+                      ? 'border-zinc-900 dark:border-zinc-100 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900'
+                      : 'border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800'
                   }`}
-                  title={
-                    activeMyLiveLocationMsg
-                      ? 'Avslutt aktiv posisjonsdeling'
-                      : 'Del nåværende live-posisjon i 30 minutter'
-                  }
+                  title="Foreslå 3 ledige møtetidspunkter basert på kalender"
                 >
-                  <Navigation className="w-3.5 h-3.5 shrink-0" />
-                  <span className="hidden md:inline">
-                    {activeMyLiveLocationMsg
-                      ? 'Avslutt posisjon'
-                      : 'Del live-posisjon'}
-                  </span>
+                  <Calendar className="w-3.5 h-3.5 shrink-0" />
+                  <span className="hidden md:inline">Foreslå møtetidspunkt</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowLocationPrompt(false);
+                    setShowMeetingDrawer(false);
+                    setShowGameLibraryDrawer((v) => !v);
+                  }}
+                  className={`min-h-[40px] px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-medium inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 transition ${
+                    showGameLibraryDrawer
+                      ? 'border-zinc-900 dark:border-zinc-100 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900'
+                      : 'border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800'
+                  }`}
+                  title="Åpne Spill-bibliotek for interaktive spørsmålsspill"
+                >
+                  <Gamepad2 className="w-3.5 h-3.5 shrink-0" />
+                  <span className="hidden md:inline">Spill-bibliotek</span>
                 </button>
 
                 <button
@@ -753,6 +835,27 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                           void onStopLiveLocation(activeMatch.id, messageId)
                         }
                       />
+                    ) : msg.meetingProposal ? (
+                      <MeetingProposalMessageCard
+                        message={msg}
+                        proposal={msg.meetingProposal}
+                        isMine={isMine}
+                        partnerName={activeProfile.name}
+                        partnerCity={activeProfile.city}
+                        onSelectSlot={onSelectMeetingSlot}
+                        onRequestAddToGoogleCalendar={(params) =>
+                          setPendingCalendarConfirm(params)
+                        }
+                      />
+                    ) : msg.gameSession ? (
+                      <ChatGameMessageCard
+                        message={msg}
+                        session={msg.gameSession}
+                        partnerName={activeProfile.name}
+                        onAnswerRound={onAnswerChatGameRound}
+                        onNextRound={onNextChatGameRound}
+                        onStartNewGame={onStartChatGame}
+                      />
                     ) : (
                       <div
                         className={`max-w-[82%] sm:max-w-[70%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
@@ -770,7 +873,11 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                           ? 'Icebreaker · '
                           : msg.liveLocation
                             ? 'Live-posisjon · '
-                            : ''}
+                            : msg.meetingProposal
+                              ? 'Møteforslag · '
+                              : msg.gameSession
+                                ? 'Spill-bibliotek · '
+                                : ''}
                         {msg.createdAt}
                       </span>
                       {isMine && (
@@ -908,10 +1015,35 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
               )}
             </AnimatePresence>
 
-            {/* Composer with Quick Live-Location Trigger */}
+            {/* Expandable 'Foreslå møtetidspunkt' Drawer (Google Calendar + Partner Availability) */}
+            <AnimatePresence initial={false}>
+              {showMeetingDrawer && (
+                <MeetingProposalDrawer
+                  matchId={activeMatch.id}
+                  partner={activeProfile}
+                  onFetchPartnerAvailability={onFetchPartnerAvailability}
+                  onSendMeetingProposal={onSendMeetingProposal}
+                  onClose={() => setShowMeetingDrawer(false)}
+                />
+              )}
+            </AnimatePresence>
+
+            {/* Expandable 'Spill-bibliotek' Drawer */}
+            <AnimatePresence initial={false}>
+              {showGameLibraryDrawer && (
+                <ChatGameLibraryDrawer
+                  matchId={activeMatch.id}
+                  partnerName={activeProfile.name}
+                  onStartGame={onStartChatGame}
+                  onClose={() => setShowGameLibraryDrawer(false)}
+                />
+              )}
+            </AnimatePresence>
+
+            {/* Composer with Quick Triggers for Live-Location, Meeting Proposal & Game Library */}
             <form
               onSubmit={handleSubmit}
-              className="p-3.5 sm:px-6 sm:py-4 border-t border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex items-center gap-2 shrink-0"
+              className="p-3 sm:px-6 sm:py-4 border-t border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex items-center gap-1.5 sm:gap-2 shrink-0"
             >
               <button
                 type="button"
@@ -923,6 +1055,8 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                       activeMyLiveLocationMsg.id
                     );
                   } else {
+                    setShowMeetingDrawer(false);
+                    setShowGameLibraryDrawer(false);
                     setShowLocationPrompt((v) => !v);
                   }
                 }}
@@ -936,7 +1070,7 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                     ? 'Avslutt deling av live-posisjon'
                     : 'Del live-posisjon i 30 minutter'
                 }
-                className={`min-h-[48px] min-w-[48px] sm:px-3.5 rounded-xl border text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition whitespace-nowrap shrink-0 ${
+                className={`min-h-[48px] min-w-[44px] px-2.5 sm:px-3 rounded-xl border text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition whitespace-nowrap shrink-0 ${
                   activeMyLiveLocationMsg
                     ? 'border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-950'
                     : showLocationPrompt
@@ -949,9 +1083,45 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                 ) : (
                   <MapPin className="w-4 h-4 shrink-0" />
                 )}
-                <span className="hidden sm:inline">
-                  {activeMyLiveLocationMsg ? 'Stopp posisjon' : 'Del live-posisjon'}
+                <span className="hidden xl:inline">
+                  {activeMyLiveLocationMsg ? 'Stopp posisjon' : 'Posisjon'}
                 </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowLocationPrompt(false);
+                  setShowGameLibraryDrawer(false);
+                  setShowMeetingDrawer((v) => !v);
+                }}
+                aria-label="Foreslå møtetidspunkt"
+                title="Foreslå møtetidspunkt basert på kalender"
+                className={`md:hidden min-h-[48px] min-w-[44px] px-2.5 rounded-xl border text-xs font-semibold inline-flex items-center justify-center transition shrink-0 ${
+                  showMeetingDrawer
+                    ? 'border-zinc-900 dark:border-zinc-100 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900'
+                    : 'border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/80 text-zinc-700 dark:text-zinc-200'
+                }`}
+              >
+                <Calendar className="w-4 h-4 shrink-0" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowLocationPrompt(false);
+                  setShowMeetingDrawer(false);
+                  setShowGameLibraryDrawer((v) => !v);
+                }}
+                aria-label="Åpne Spill-bibliotek"
+                title="Spill-bibliotek"
+                className={`md:hidden min-h-[48px] min-w-[44px] px-2.5 rounded-xl border text-xs font-semibold inline-flex items-center justify-center transition shrink-0 ${
+                  showGameLibraryDrawer
+                    ? 'border-zinc-900 dark:border-zinc-100 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900'
+                    : 'border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/80 text-zinc-700 dark:text-zinc-200'
+                }`}
+              >
+                <Gamepad2 className="w-4 h-4 shrink-0" />
               </button>
 
               <input
@@ -959,7 +1129,7 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 placeholder={`Skriv en melding til ${activeProfile.name}...`}
-                className="flex-1 min-h-[48px] px-4 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/80 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none focus:bg-white dark:focus:bg-zinc-800 focus:border-zinc-900 dark:focus:border-zinc-300"
+                className="flex-1 min-w-0 min-h-[48px] px-3.5 sm:px-4 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/80 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none focus:bg-white dark:focus:bg-zinc-800 focus:border-zinc-900 dark:focus:border-zinc-300"
               />
               <button
                 type="submit"
@@ -973,6 +1143,13 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
           </div>
         )}
       </div>
+
+      {/* Mandatory Confirmation Modal Before Mutating User's Google Calendar */}
+      <CalendarEventConfirmModal
+        pendingEvent={pendingCalendarConfirm}
+        onClose={() => setPendingCalendarConfirm(null)}
+        onSynced={onMarkMeetingCalendarSynced}
+      />
     </section>
   );
 };

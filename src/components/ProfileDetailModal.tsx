@@ -15,6 +15,7 @@ import {
 import { AnimatePresence, motion } from 'framer-motion';
 import type { DatingProfile, MatchRecord } from '../types';
 import { SafeImage, VerifiedBadge } from './CommonUI';
+import { ProfileAchievementsDisplay } from './GamificationModules';
 import { InterestBadges } from './InterestBadges';
 
 interface ProfileDetailModalProps {
@@ -281,6 +282,18 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
                     matchingCountsByInterest={matchingCountsByInterest}
                     onSelectInterest={onSelectInterest}
                   />
+                )}
+
+                {/* User Achievements & Milestones on Profile */}
+                {profile.achievements && profile.achievements.length > 0 && (
+                  <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800">
+                    <ProfileAchievementsDisplay
+                      achievements={profile.achievements}
+                      level={profile.level}
+                      levelTitle={profile.levelTitle}
+                      heading={`Prestasjoner på ${profile.name}s profil`}
+                    />
+                  </div>
                 )}
 
                 {/* Profile Prompts */}

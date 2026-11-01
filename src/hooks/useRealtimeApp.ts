@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getOrCreateClientId } from './usePushNotifications';
 import type {
+  ChatGameId,
+  ChatGameSession,
   ChatMessage,
   CurrentUser,
   DatingCoachAdvice,
@@ -9,6 +11,9 @@ import type {
   LiveLocationShare,
   LiveStreamRoom,
   MatchRecord,
+  MeetingProposalShare,
+  PartnerAvailabilityResponse,
+  ProposedTimeSlot,
   PushToastNotification,
   ServerState,
   StreamComment,
@@ -122,6 +127,65 @@ const INITIAL_FALLBACK_STATE: ServerState = {
     ],
   },
   streams: [],
+  gamification: {
+    xp: 465,
+    level: 3,
+    levelTitle: 'Date-arkitekt',
+    currentLevelBaseXp: 400,
+    nextLevelXp: 700,
+    superSparks: 1,
+    loginStreak: 2,
+    lastClaimedDate: null,
+    canClaimToday: true,
+    currentCycleDay: 3,
+    icebreakersSentCount: 1,
+    gamesPlayedCount: 0,
+    datesProposedCount: 0,
+    dailyRewards: [
+      { day: 1, label: 'Dag 1', xp: 50, bonusSparks: 0, claimed: true, isCurrent: false },
+      { day: 2, label: 'Dag 2', xp: 75, bonusSparks: 1, claimed: true, isCurrent: false },
+      { day: 3, label: 'Dag 3', xp: 100, bonusSparks: 1, claimed: false, isCurrent: true },
+      { day: 4, label: 'Dag 4', xp: 125, bonusSparks: 1, claimed: false, isCurrent: false },
+      { day: 5, label: 'Dag 5', xp: 150, bonusSparks: 2, claimed: false, isCurrent: false },
+      { day: 6, label: 'Dag 6', xp: 200, bonusSparks: 2, claimed: false, isCurrent: false },
+      { day: 7, label: 'Dag 7', xp: 300, bonusSparks: 3, claimed: false, isCurrent: false },
+    ],
+    achievements: [
+      {
+        id: 'complete_profile',
+        title: 'Komplett profil',
+        description: 'Fyll ut biografi, yrke, minst 3 interesser og 2 profilbilder',
+        icon: 'profile',
+        xpReward: 120,
+        progress: 4,
+        target: 4,
+        unlocked: true,
+        unlockedAt: 'I dag',
+      },
+      {
+        id: 'icebreaker_sender',
+        title: 'Isbryteren',
+        description: 'Send minst 1 samtalestarter (icebreaker) til en match',
+        icon: 'icebreaker',
+        xpReward: 80,
+        progress: 1,
+        target: 1,
+        unlocked: true,
+        unlockedAt: 'I dag',
+      },
+      {
+        id: 'first_match',
+        title: 'Første Gnist',
+        description: 'Få din første gjensidige match i Gnist',
+        icon: 'match',
+        xpReward: 100,
+        progress: 1,
+        target: 1,
+        unlocked: true,
+        unlockedAt: 'I dag',
+      },
+    ],
+  },
 };
 
 export function useRealtimeApp() {
@@ -176,6 +240,7 @@ export function useRealtimeApp() {
           reportedUsers: Array.isArray(data.reportedUsers)
             ? data.reportedUsers
             : prev.reportedUsers,
+          gamification: data.gamification || prev.gamification,
         }));
       }
     } catch {
@@ -232,6 +297,7 @@ export function useRealtimeApp() {
               reportedUsers: Array.isArray(incoming.reportedUsers)
                 ? incoming.reportedUsers
                 : prev.reportedUsers,
+              gamification: incoming.gamification || prev.gamification,
             }));
             setLoading(false);
           } else if (event === 'chat:message') {
@@ -353,6 +419,44 @@ export function useRealtimeApp() {
               ...prev,
               streams: prev.streams.map((s) => (s.id === streamId ? stream : s)),
             }));
+          } else if (event === 'meeting:updated') {
+            const { matchId, messageId, meetingProposal } = payload as {
+              matchId: string;
+              messageId: string;
+              meetingProposal: MeetingProposalShare;
+            };
+            setServerState((prev) => {
+              const existing = prev.messagesByMatch[matchId];
+              if (!existing) return prev;
+              return {
+                ...prev,
+                messagesByMatch: {
+                  ...prev.messagesByMatch,
+                  [matchId]: existing.map((m) =>
+                    m.id === messageId ? { ...m, meetingProposal } : m
+                  ),
+                },
+              };
+            });
+          } else if (event === 'game:updated') {
+            const { matchId, messageId, gameSession } = payload as {
+              matchId: string;
+              messageId: string;
+              gameSession: ChatGameSession;
+            };
+            setServerState((prev) => {
+              const existing = prev.messagesByMatch[matchId];
+              if (!existing) return prev;
+              return {
+                ...prev,
+                messagesByMatch: {
+                  ...prev.messagesByMatch,
+                  [matchId]: existing.map((m) =>
+                    m.id === messageId ? { ...m, gameSession } : m
+                  ),
+                },
+              };
+            });
           }
         } catch {
           // Ignore malformed payloads
@@ -1423,6 +1527,233 @@ export function useRealtimeApp() {
     []
   );
 
+  const claimDailyReward = useCallback(async () => {
+    try {
+      const res = await fetch('/api/gamification/claim-daily', {
+        method: 'POST',
+      });
+      if (res.ok) {
+        const data = (await res.json()) as {
+          ok: boolean;
+          xpEarned?: number;
+          bonusSparks?: number;
+          streak?: number;
+          state?: ServerState;
+        };
+        if (data.state) {
+          setServerState(data.state);
+        }
+        return {
+          ok: true,
+          xpEarned: data.xpEarned,
+          bonusSparks: data.bonusSparks,
+          streak: data.streak,
+        };
+      }
+    } catch {
+      // Ignore network error
+    }
+    return { ok: false };
+  }, []);
+
+  const fetchPartnerAvailability = useCallback(
+    async (matchId: string): Promise<PartnerAvailabilityResponse | null> => {
+      try {
+        const res = await fetch(
+          `/api/matches/${encodeURIComponent(matchId)}/availability`
+        );
+        if (res.ok) {
+          return (await res.json()) as PartnerAvailabilityResponse;
+        }
+      } catch {
+        // Ignore network error
+      }
+      return null;
+    },
+    []
+  );
+
+  const sendMeetingProposal = useCallback(
+    async (params: {
+      matchId: string;
+      slots: ProposedTimeSlot[];
+      userCalendarChecked: boolean;
+      note?: string;
+    }): Promise<boolean> => {
+      try {
+        const res = await fetch(
+          `/api/matches/${encodeURIComponent(params.matchId)}/meeting-proposals`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              slots: params.slots,
+              userCalendarChecked: params.userCalendarChecked,
+              note: params.note,
+            }),
+          }
+        );
+        if (res.ok) {
+          const data = (await res.json()) as { state?: ServerState };
+          if (data.state) {
+            setServerState(data.state);
+          }
+          return true;
+        }
+      } catch {
+        // Ignore
+      }
+      return false;
+    },
+    []
+  );
+
+  const selectMeetingSlot = useCallback(
+    async (matchId: string, messageId: string, slotId: string) => {
+      try {
+        const res = await fetch(
+          `/api/matches/${encodeURIComponent(
+            matchId
+          )}/meeting-proposals/${encodeURIComponent(messageId)}/select`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ slotId }),
+          }
+        );
+        if (res.ok) {
+          const data = (await res.json()) as { state?: ServerState };
+          if (data.state) {
+            setServerState(data.state);
+          }
+        }
+      } catch {
+        // Ignore
+      }
+    },
+    []
+  );
+
+  const markMeetingCalendarSynced = useCallback(
+    async (params: {
+      matchId: string;
+      messageId: string;
+      eventId: string;
+      htmlLink: string;
+    }) => {
+      try {
+        const res = await fetch(
+          `/api/matches/${encodeURIComponent(
+            params.matchId
+          )}/meeting-proposals/${encodeURIComponent(
+            params.messageId
+          )}/calendar-synced`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              eventId: params.eventId,
+              htmlLink: params.htmlLink,
+            }),
+          }
+        );
+        if (res.ok) {
+          const data = (await res.json()) as { state?: ServerState };
+          if (data.state) {
+            setServerState(data.state);
+          }
+        }
+      } catch {
+        // Ignore
+      }
+    },
+    []
+  );
+
+  const startChatGame = useCallback(
+    async (matchId: string, gameId: ChatGameId): Promise<boolean> => {
+      try {
+        const res = await fetch(
+          `/api/matches/${encodeURIComponent(matchId)}/games/start`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ gameId }),
+          }
+        );
+        if (res.ok) {
+          const data = (await res.json()) as { state?: ServerState };
+          if (data.state) {
+            setServerState(data.state);
+          }
+          return true;
+        }
+      } catch {
+        // Ignore
+      }
+      return false;
+    },
+    []
+  );
+
+  const answerChatGameRound = useCallback(
+    async (params: {
+      matchId: string;
+      messageId: string;
+      roundIndex: number;
+      choiceIndex: number;
+    }) => {
+      try {
+        const res = await fetch(
+          `/api/matches/${encodeURIComponent(
+            params.matchId
+          )}/games/${encodeURIComponent(params.messageId)}/answer`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              roundIndex: params.roundIndex,
+              choiceIndex: params.choiceIndex,
+            }),
+          }
+        );
+        if (res.ok) {
+          const data = (await res.json()) as { state?: ServerState };
+          if (data.state) {
+            setServerState(data.state);
+          }
+        }
+      } catch {
+        // Ignore
+      }
+    },
+    []
+  );
+
+  const nextChatGameRound = useCallback(
+    async (matchId: string, messageId: string) => {
+      try {
+        const res = await fetch(
+          `/api/matches/${encodeURIComponent(
+            matchId
+          )}/games/${encodeURIComponent(messageId)}/next`,
+          {
+            method: 'POST',
+          }
+        );
+        if (res.ok) {
+          const data = (await res.json()) as { state?: ServerState };
+          if (data.state) {
+            setServerState(data.state);
+          }
+        }
+      } catch {
+        // Ignore
+      }
+    },
+    []
+  );
+
   return {
     serverState,
     loading,
@@ -1454,6 +1785,14 @@ export function useRealtimeApp() {
     reportUser,
     requestDatingCoach,
     generateMatchIcebreakers,
+    claimDailyReward,
+    fetchPartnerAvailability,
+    sendMeetingProposal,
+    selectMeetingSlot,
+    markMeetingCalendarSynced,
+    startChatGame,
+    answerChatGameRound,
+    nextChatGameRound,
   };
 }
 

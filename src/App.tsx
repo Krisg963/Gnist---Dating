@@ -107,6 +107,14 @@ export default function App() {
     reportUser,
     requestDatingCoach,
     generateMatchIcebreakers,
+    claimDailyReward,
+    fetchPartnerAvailability,
+    sendMeetingProposal,
+    selectMeetingSlot,
+    markMeetingCalendarSynced,
+    startChatGame,
+    answerChatGameRound,
+    nextChatGameRound,
   } = useRealtimeApp();
 
   const {
@@ -481,6 +489,9 @@ export default function App() {
               )}
             </span>
             <span>{serverState.currentUser.name}</span>
+            <span className="hidden sm:inline text-xs opacity-75 tabular-nums">
+              · Nivå {serverState.gamification.level}
+            </span>
             {serverState.currentUser.verified && <VerifiedBadge size="sm" />}
           </button>
         </div>
@@ -648,6 +659,9 @@ export default function App() {
                 swipedRightIds={serverState.swipedRightIds}
                 viewerInterests={serverState.currentUser.interests}
                 externalInterestFilter={discoverInterestFilter}
+                gamification={serverState.gamification}
+                onClaimDailyReward={claimDailyReward}
+                onOpenProfileAchievements={() => navigateToTab('profile')}
                 onSelectProfile={(p) => setSelectedProfile(p)}
                 onQuickLike={(profileId) => swipeProfile(profileId, 'right')}
                 onOpenChat={handleOpenChat}
@@ -720,6 +734,13 @@ export default function App() {
                   setReportTarget({ profile: p, matchId: mId || null })
                 }
                 onGenerateIcebreakers={generateMatchIcebreakers}
+                onFetchPartnerAvailability={fetchPartnerAvailability}
+                onSendMeetingProposal={sendMeetingProposal}
+                onSelectMeetingSlot={selectMeetingSlot}
+                onMarkMeetingCalendarSynced={markMeetingCalendarSynced}
+                onStartChatGame={startChatGame}
+                onAnswerChatGameRound={answerChatGameRound}
+                onNextChatGameRound={nextChatGameRound}
                 onGoToSwipe={() => navigateToTab('swipe')}
               />
             )}
@@ -727,6 +748,7 @@ export default function App() {
             {activeTab === 'profile' && (
               <MyProfileView
                 currentUser={serverState.currentUser}
+                gamification={serverState.gamification}
                 swipeStats={serverState.swipeStats}
                 swipeHistory={visibleSwipeHistory}
                 matchesCount={visibleMatches.length}
@@ -752,6 +774,7 @@ export default function App() {
                   onUpdatePreferences: pushState.updatePreferences,
                   onSendTestPush: pushState.sendTestPush,
                 }}
+                onClaimDailyReward={claimDailyReward}
                 onSaveProfile={updateProfile}
                 onUpdateDailyGoal={updateDailySwipeGoal}
                 onGoToSwipe={() => navigateToTab('swipe')}

@@ -77,6 +77,28 @@ export const PROFILES: DatingProfile[] = [
       'Seiltur langs kysten eller hyttehelg på fjellet?',
     ],
     readReceiptsEnabled: true,
+    level: 3,
+    levelTitle: 'Date-arkitekt',
+    achievements: [
+      {
+        id: 'complete_profile',
+        title: 'Komplett profil',
+        description: 'Fullført bio, interesser og bilder',
+        icon: 'profile',
+      },
+      {
+        id: 'verified_star',
+        title: 'Trygg & Verifisert',
+        description: 'Bekreftet identitet med pose-selfie',
+        icon: 'verified',
+      },
+      {
+        id: 'daily_streak',
+        title: '5-dagers Gnist-rekke',
+        description: 'Logget inn og aktiv 5 dager på rad',
+        icon: 'streak',
+      },
+    ],
   },
   {
     id: 'sofie',
@@ -112,6 +134,34 @@ export const PROFILES: DatingProfile[] = [
       'Hvis vi kunne reist hvor som helst neste fredag etter jobb, hvor drar vi?',
     ],
     readReceiptsEnabled: true,
+    level: 4,
+    levelTitle: 'Kjemimester',
+    achievements: [
+      {
+        id: 'complete_profile',
+        title: 'Komplett profil',
+        description: 'Fullført bio, interesser og bilder',
+        icon: 'profile',
+      },
+      {
+        id: 'verified_star',
+        title: 'Trygg & Verifisert',
+        description: 'Bekreftet identitet med pose-selfie',
+        icon: 'verified',
+      },
+      {
+        id: 'icebreaker_sender',
+        title: 'Isbryteren',
+        description: 'Sendt personlige samtalestartere til matcher',
+        icon: 'icebreaker',
+      },
+      {
+        id: 'match_magnet',
+        title: 'Match-magnet',
+        description: 'Oppnådd 5+ gjensidige matcher',
+        icon: 'match',
+      },
+    ],
   },
   {
     id: 'nora',
@@ -147,6 +197,28 @@ export const PROFILES: DatingProfile[] = [
       'Grønne planter overalt i leiligheten — hvor mange har du egentlig nå?',
     ],
     readReceiptsEnabled: true,
+    level: 3,
+    levelTitle: 'Samtalestarter',
+    achievements: [
+      {
+        id: 'complete_profile',
+        title: 'Komplett profil',
+        description: 'Fullført bio, interesser og bilder',
+        icon: 'profile',
+      },
+      {
+        id: 'verified_star',
+        title: 'Trygg & Verifisert',
+        description: 'Bekreftet identitet med pose-selfie',
+        icon: 'verified',
+      },
+      {
+        id: 'game_player',
+        title: 'Spillmester',
+        description: 'Spilt spørsmålsspill i samtaleloggen',
+        icon: 'game',
+      },
+    ],
   },
   {
     id: 'kasper',
@@ -182,6 +254,22 @@ export const PROFILES: DatingProfile[] = [
       'Hva pakker du alltid med i sekken som turkameratene dine blir misunnelige på?',
     ],
     readReceiptsEnabled: false,
+    level: 2,
+    levelTitle: 'Samtalestarter',
+    achievements: [
+      {
+        id: 'complete_profile',
+        title: 'Komplett profil',
+        description: 'Fullført bio, interesser og bilder',
+        icon: 'profile',
+      },
+      {
+        id: 'verified_star',
+        title: 'Trygg & Verifisert',
+        description: 'Bekreftet identitet med pose-selfie',
+        icon: 'verified',
+      },
+    ],
   },
   {
     id: 'emil',
@@ -217,6 +305,22 @@ export const PROFILES: DatingProfile[] = [
       'Rolig vinylkveld hjemme eller intimkonsert på en liten scene i byen?',
     ],
     readReceiptsEnabled: false,
+    level: 2,
+    levelTitle: 'Samtalestarter',
+    achievements: [
+      {
+        id: 'complete_profile',
+        title: 'Komplett profil',
+        description: 'Fullført bio, interesser og bilder',
+        icon: 'profile',
+      },
+      {
+        id: 'icebreaker_sender',
+        title: 'Isbryteren',
+        description: 'Sendt kreative samtalestartere',
+        icon: 'icebreaker',
+      },
+    ],
   },
   {
     id: 'ingrid',
@@ -252,6 +356,34 @@ export const PROFILES: DatingProfile[] = [
       'Hva er den siste boka du leste som du fortsatt tenker på?',
     ],
     readReceiptsEnabled: true,
+    level: 4,
+    levelTitle: 'Kjemimester',
+    achievements: [
+      {
+        id: 'complete_profile',
+        title: 'Komplett profil',
+        description: 'Fullført bio, interesser og bilder',
+        icon: 'profile',
+      },
+      {
+        id: 'verified_star',
+        title: 'Trygg & Verifisert',
+        description: 'Bekreftet identitet med pose-selfie',
+        icon: 'verified',
+      },
+      {
+        id: 'date_planner',
+        title: 'Date-planlegger',
+        description: 'Synkronisert kalender for enkel møteplanlegging',
+        icon: 'calendar',
+      },
+      {
+        id: 'match_magnet',
+        title: 'Match-magnet',
+        description: 'Oppnådd 3+ gjensidige matcher',
+        icon: 'match',
+      },
+    ],
   },
   {
     id: 'astrid',
@@ -282,11 +414,33 @@ export const PROFILES: DatingProfile[] = [
     ],
     image: astridImg,
     icebreakers: [
-      ' Asfaltløping langs vannet eller bratt sti opp på nærmeste fjelltopp?',
+      'Asfaltløping langs vannet eller bratt sti opp på nærmeste fjelltopp?',
       'Hvilket land på togreisen gjennom Europa hadde den beste maten?',
       'Isbad i fjorden før frokost — ja eller absolutt nei?',
     ],
     readReceiptsEnabled: true,
+    level: 3,
+    levelTitle: 'Date-arkitekt',
+    achievements: [
+      {
+        id: 'complete_profile',
+        title: 'Komplett profil',
+        description: 'Fullført bio, interesser og bilder',
+        icon: 'profile',
+      },
+      {
+        id: 'verified_star',
+        title: 'Trygg & Verifisert',
+        description: 'Bekreftet identitet med pose-selfie',
+        icon: 'verified',
+      },
+      {
+        id: 'daily_streak',
+        title: 'Daglig Gnist',
+        description: 'Aktiv streak i Gnist',
+        icon: 'streak',
+      },
+    ],
   },
   {
     id: 'sander',
@@ -322,6 +476,28 @@ export const PROFILES: DatingProfile[] = [
       'Nordover eller sørover hvis vi kaster oss i bilen på fredag?',
     ],
     readReceiptsEnabled: true,
+    level: 3,
+    levelTitle: 'Date-arkitekt',
+    achievements: [
+      {
+        id: 'complete_profile',
+        title: 'Komplett profil',
+        description: 'Fullført bio, interesser og bilder',
+        icon: 'profile',
+      },
+      {
+        id: 'verified_star',
+        title: 'Trygg & Verifisert',
+        description: 'Bekreftet identitet med pose-selfie',
+        icon: 'verified',
+      },
+      {
+        id: 'icebreaker_sender',
+        title: 'Isbryteren',
+        description: 'Sendt personlige samtalestartere',
+        icon: 'icebreaker',
+      },
+    ],
   },
 ];
 

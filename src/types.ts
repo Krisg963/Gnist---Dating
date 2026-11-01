@@ -21,6 +21,63 @@ export interface ProfilePrompt {
   answer: string;
 }
 
+export type AchievementIconKey =
+  | 'profile'
+  | 'verified'
+  | 'icebreaker'
+  | 'match'
+  | 'streak'
+  | 'calendar'
+  | 'game'
+  | 'swipe';
+
+export interface AchievementBadge {
+  id: string;
+  title: string;
+  description: string;
+  icon: AchievementIconKey;
+  xpReward: number;
+  progress: number;
+  target: number;
+  unlocked: boolean;
+  unlockedAt: string | null;
+}
+
+export interface ProfileAchievementSummary {
+  id: string;
+  title: string;
+  description: string;
+  icon: AchievementIconKey;
+  unlockedAt?: string;
+}
+
+export interface DailyRewardStep {
+  day: number;
+  label: string;
+  xp: number;
+  bonusSparks: number;
+  claimed: boolean;
+  isCurrent: boolean;
+}
+
+export interface GamificationState {
+  xp: number;
+  level: number;
+  levelTitle: string;
+  currentLevelBaseXp: number;
+  nextLevelXp: number;
+  superSparks: number;
+  loginStreak: number;
+  lastClaimedDate: string | null;
+  canClaimToday: boolean;
+  currentCycleDay: number;
+  icebreakersSentCount: number;
+  gamesPlayedCount: number;
+  datesProposedCount: number;
+  dailyRewards: DailyRewardStep[];
+  achievements: AchievementBadge[];
+}
+
 export interface DatingProfile {
   id: string;
   name: string;
@@ -44,6 +101,9 @@ export interface DatingProfile {
   videoIntroPrompt?: string | null;
   icebreakers: [string, string, string];
   readReceiptsEnabled?: boolean;
+  achievements?: ProfileAchievementSummary[];
+  level?: number;
+  levelTitle?: string;
   isCurrentUserPreview?: boolean;
 }
 
@@ -112,6 +172,69 @@ export interface LiveLocationShare {
   isActive: boolean;
 }
 
+export interface CalendarBusyInterval {
+  startIso: string;
+  endIso: string;
+  label?: string;
+}
+
+export interface PartnerAvailabilityResponse {
+  matchId: string;
+  partnerId: string;
+  partnerName: string;
+  partnerCity: string;
+  busyIntervals: CalendarBusyInterval[];
+  preferredNote: string;
+}
+
+export interface ProposedTimeSlot {
+  id: string;
+  startIso: string;
+  endIso: string;
+  dayLabel: string;
+  timeRangeLabel: string;
+  activitySuggestion: string;
+}
+
+export interface MeetingProposalShare {
+  proposalId: string;
+  slots: ProposedTimeSlot[];
+  selectedSlotId: string | null;
+  selectedById: string | null;
+  selectedByName: string | null;
+  partnerSuggestedSlotId: string | null;
+  userCalendarChecked: boolean;
+  note: string | null;
+  addedToGoogleCalendarEventId: string | null;
+  addedToGoogleCalendarLink: string | null;
+  createdAtIso: string;
+  updatedAtIso: string;
+}
+
+export type ChatGameId = 'would_you_rather' | 'this_or_that' | 'spark_quiz';
+
+export interface ChatGameRound {
+  roundIndex: number;
+  prompt: string;
+  options: string[];
+  myChoiceIndex: number | null;
+  partnerChoiceIndex: number | null;
+}
+
+export interface ChatGameSession {
+  sessionId: string;
+  gameId: ChatGameId;
+  gameTitle: string;
+  gameSubtitle: string;
+  currentRoundIndex: number;
+  totalRounds: number;
+  rounds: ChatGameRound[];
+  matchedChoicesCount: number;
+  status: 'active' | 'completed';
+  startedByName: string;
+  updatedAtIso: string;
+}
+
 export interface ChatMessage {
   id: string;
   matchId: string;
@@ -122,6 +245,8 @@ export interface ChatMessage {
   isIcebreaker?: boolean;
   readAt?: string | null;
   liveLocation?: LiveLocationShare | null;
+  meetingProposal?: MeetingProposalShare | null;
+  gameSession?: ChatGameSession | null;
 }
 
 export interface StreamComment {
@@ -224,6 +349,5 @@ export interface ServerState {
   matches: MatchRecord[];
   messagesByMatch: Record<string, ChatMessage[]>;
   streams: LiveStreamRoom[];
+  gamification: GamificationState;
 }
-
-

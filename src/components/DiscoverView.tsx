@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  Award,
   Check,
   Heart,
   MessageCircle,
@@ -18,10 +19,12 @@ import {
 import type {
   DatingProfile,
   EducationLevel,
+  GamificationState,
   MatchRecord,
   RelationshipGoal,
 } from '../types';
 import { SafeImage, VerifiedBadge } from './CommonUI';
+import { DailyRewardBanner } from './GamificationModules';
 import { normalizeInterestKey } from './InterestBadges';
 
 type QuickStatusFilter = 'all' | 'online' | 'new' | 'verified';
@@ -33,6 +36,14 @@ interface DiscoverViewProps {
   swipedRightIds: string[];
   viewerInterests: string[];
   externalInterestFilter?: { interest: string; nonce: number } | null;
+  gamification?: GamificationState;
+  onClaimDailyReward?: () => Promise<{
+    ok: boolean;
+    xpEarned?: number;
+    bonusSparks?: number;
+    streak?: number;
+  }>;
+  onOpenProfileAchievements?: () => void;
   onSelectProfile: (profile: DatingProfile) => void;
   onQuickLike: (profileId: string) => void;
   onOpenChat: (matchId: string) => void;
@@ -51,6 +62,9 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
   swipedRightIds,
   viewerInterests,
   externalInterestFilter,
+  gamification,
+  onClaimDailyReward,
+  onOpenProfileAchievements,
   onSelectProfile,
   onQuickLike,
   onOpenChat,
@@ -254,6 +268,14 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
 
   return (
     <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-8">
+      {gamification && onClaimDailyReward && onOpenProfileAchievements && (
+        <DailyRewardBanner
+          gamification={gamification}
+          onClaimDailyReward={onClaimDailyReward}
+          onOpenProfileAchievements={onOpenProfileAchievements}
+        />
+      )}
+
       {/* Header Row */}
       <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mb-5">
         <div>
@@ -747,6 +769,19 @@ export const DiscoverView: React.FC<DiscoverViewProps> = ({
                         {profile.interests.slice(0, 3).join(' · ')}
                       </span>
                     </div>
+
+                    {profile.achievements && profile.achievements.length > 0 && (
+                      <div className="mt-0.5 text-[11px] text-amber-200/95 truncate flex items-center gap-1 tabular-nums">
+                        <Award
+                          className="w-3 h-3 text-amber-300 shrink-0"
+                          aria-hidden="true"
+                        />
+                        <span className="truncate">
+                          {profile.achievements.length} prestasjoner ·{' '}
+                          {profile.achievements[0].title}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </button>
 

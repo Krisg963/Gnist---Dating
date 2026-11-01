@@ -88,6 +88,54 @@ interface LiveLocationShare {
   isActive: boolean;
 }
 
+interface ProposedTimeSlot {
+  id: string;
+  startIso: string;
+  endIso: string;
+  dayLabel: string;
+  timeRangeLabel: string;
+  activitySuggestion: string;
+}
+
+interface MeetingProposalShare {
+  proposalId: string;
+  slots: ProposedTimeSlot[];
+  selectedSlotId: string | null;
+  selectedById: string | null;
+  selectedByName: string | null;
+  partnerSuggestedSlotId: string | null;
+  userCalendarChecked: boolean;
+  note: string | null;
+  addedToGoogleCalendarEventId: string | null;
+  addedToGoogleCalendarLink: string | null;
+  createdAtIso: string;
+  updatedAtIso: string;
+}
+
+type ChatGameId = 'would_you_rather' | 'this_or_that' | 'spark_quiz';
+
+interface ChatGameRound {
+  roundIndex: number;
+  prompt: string;
+  options: string[];
+  myChoiceIndex: number | null;
+  partnerChoiceIndex: number | null;
+}
+
+interface ChatGameSession {
+  sessionId: string;
+  gameId: ChatGameId;
+  gameTitle: string;
+  gameSubtitle: string;
+  currentRoundIndex: number;
+  totalRounds: number;
+  rounds: ChatGameRound[];
+  matchedChoicesCount: number;
+  status: 'active' | 'completed';
+  startedByName: string;
+  updatedAtIso: string;
+}
+
 interface ChatMessage {
   id: string;
   matchId: string;
@@ -98,6 +146,59 @@ interface ChatMessage {
   isIcebreaker?: boolean;
   readAt?: string | null;
   liveLocation?: LiveLocationShare | null;
+  meetingProposal?: MeetingProposalShare | null;
+  gameSession?: ChatGameSession | null;
+}
+
+type AchievementIconKey =
+  | 'profile'
+  | 'verified'
+  | 'icebreaker'
+  | 'match'
+  | 'streak'
+  | 'calendar'
+  | 'game'
+  | 'swipe';
+
+interface AchievementBadge {
+  id: string;
+  title: string;
+  description: string;
+  icon: AchievementIconKey;
+  xpReward: number;
+  progress: number;
+  target: number;
+  unlocked: boolean;
+  unlockedAt: string | null;
+}
+
+interface DailyRewardStep {
+  day: number;
+  label: string;
+  xp: number;
+  bonusSparks: number;
+  claimed: boolean;
+  isCurrent: boolean;
+}
+
+interface GamificationState {
+  xp: number;
+  level: number;
+  levelTitle: string;
+  currentLevelBaseXp: number;
+  nextLevelXp: number;
+  superSparks: number;
+  loginStreak: number;
+  lastClaimedDate: string | null;
+  canClaimToday: boolean;
+  currentCycleDay: number;
+  icebreakersSentCount: number;
+  gamesPlayedCount: number;
+  datesProposedCount: number;
+  dailyRewards: DailyRewardStep[];
+  achievements: AchievementBadge[];
+  claimBonusXp?: number;
+  unlockedTimestamps?: Record<string, string>;
 }
 
 interface StreamComment {
@@ -157,6 +258,7 @@ interface ServerState {
   matches: MatchRecord[];
   messagesByMatch: Record<string, ChatMessage[]>;
   streams: LiveStreamRoom[];
+  gamification: GamificationState;
 }
 
 interface StoredPushSubscription {
@@ -175,6 +277,175 @@ const PROFILE_DISPLAY_NAMES: Record<string, string> = {
   emil: 'Emil',
   astrid: 'Astrid',
   sander: 'Sander',
+};
+
+const PROFILE_CITIES: Record<string, string> = {
+  ingrid: 'Oslo',
+  henrik: 'Bergen',
+  nora: 'Trondheim',
+  kasper: 'Tromsø',
+  sofie: 'Stavanger',
+  emil: 'Oslo',
+  astrid: 'Bergen',
+  sander: 'Trondheim',
+};
+
+const DAILY_REWARD_SCHEDULE: Array<{
+  day: number;
+  label: string;
+  xp: number;
+  bonusSparks: number;
+}> = [
+  { day: 1, label: 'Dag 1', xp: 50, bonusSparks: 0 },
+  { day: 2, label: 'Dag 2', xp: 75, bonusSparks: 1 },
+  { day: 3, label: 'Dag 3', xp: 100, bonusSparks: 1 },
+  { day: 4, label: 'Dag 4', xp: 125, bonusSparks: 1 },
+  { day: 5, label: 'Dag 5', xp: 150, bonusSparks: 2 },
+  { day: 6, label: 'Dag 6', xp: 200, bonusSparks: 2 },
+  { day: 7, label: 'Dag 7', xp: 300, bonusSparks: 3 },
+];
+
+const LEVEL_THRESHOLDS: Array<{ baseXp: number; title: string }> = [
+  { baseXp: 0, title: 'Nysgjerrig Gnist' },
+  { baseXp: 180, title: 'Samtalestarter' },
+  { baseXp: 400, title: 'Date-arkitekt' },
+  { baseXp: 700, title: 'Kjemimester' },
+  { baseXp: 1050, title: 'Legendarisk Gnist' },
+];
+
+const GAME_QUESTION_BANKS: Record<
+  ChatGameId,
+  {
+    title: string;
+    subtitle: string;
+    roundCount: number;
+    questions: Array<{ prompt: string; options: string[] }>;
+  }
+> = {
+  would_you_rather: {
+    title: 'Ville du heller',
+    subtitle: '5 lekne dilemmaer i samtaleloggen',
+    roundCount: 5,
+    questions: [
+      {
+        prompt: 'Ville du heller på første date...',
+        options: [
+          'Gå kveldstur langs vannet med varm kaffe på termos',
+          'Dele småretter på en lun vinbar i byen',
+        ],
+      },
+      {
+        prompt: 'Ville du heller tilbringe en frihelg...',
+        options: [
+          'På en bortgjemt tømmerhytte på fjellet uten dekning',
+          'På spontan storbytur i Europa med kun håndbagasje',
+        ],
+      },
+      {
+        prompt: 'Ville du heller alltid måtte...',
+        options: [
+          'Lage middag fra bunnen sammen hver kveld',
+          'Prøve et helt nytt spisested hver uke',
+        ],
+      },
+      {
+        prompt: 'Ville du heller ha evnen til å...',
+        options: [
+          'Snakke alle språk i verden flytende',
+          'Mestre ethvert musikkinstrument på første forsøk',
+        ],
+      },
+      {
+        prompt: 'Ville du heller starte søndagen med...',
+        options: [
+          'Forfriskende morgenbad i fjorden og badstue',
+          'Lang frokost i sengen med nykvernet kaffe og bok',
+        ],
+      },
+      {
+        prompt: 'Ville du heller dra på ferie med...',
+        options: [
+          'Tog gjennom Alpene uten fastlagt rute',
+          'Leiebil langs norskekysten under midnattssola',
+        ],
+      },
+    ],
+  },
+  this_or_that: {
+    title: 'Enten eller: Date-utgaven',
+    subtitle: 'Raske preferanser om hverdag, helg og reise',
+    roundCount: 5,
+    questions: [
+      {
+        prompt: 'Morgenkaffe eller kveldste?',
+        options: ['Nytraktet morgenkaffe', 'Rolig kveldste med stearinlys'],
+      },
+      {
+        prompt: 'Fjelltopp eller kyststi?',
+        options: ['Bratt fjelltopp med utsikt', 'Stille kyststi ved havet'],
+      },
+      {
+        prompt: 'Hjemmelaget pasta eller gatekjøkken-taco etter konsert?',
+        options: [
+          'Hjemmelaget pasta med god musikk på kjøkkenet',
+          'Sen matbit på vei hjem fra konsert',
+        ],
+      },
+      {
+        prompt: 'Planlagt reiserute eller ta alt på sparket?',
+        options: [
+          'Ha de beste stoppene klare på forhånd',
+          'Bestemme neste stopp samme morgen',
+        ],
+      },
+      {
+        prompt: 'Intimkonsert eller filmkveld i regnvær?',
+        options: [
+          'Liten intimkonsert med live-band',
+          'Lang filmkveld inne mens regnet trommer ute',
+        ],
+      },
+    ],
+  },
+  spark_quiz: {
+    title: 'Gnist-quizen',
+    subtitle: 'Tre alternativer som åpner for gode historier',
+    roundCount: 4,
+    questions: [
+      {
+        prompt: 'Hva gir deg mest påfyll etter en travel uke?',
+        options: [
+          'Frisk luft på tur i marka eller ved sjøen',
+          'Lang middag med nære venner og mye latter',
+          'Rolig alenetid med musikk, bok eller kreativt prosjekt',
+        ],
+      },
+      {
+        prompt: 'Hva legger du aller først merke til på en første date?',
+        options: [
+          'Humor og glimt i øyet',
+          'At samtalen flyter uanstrengt og nysgjerrig',
+          'Varme og tilstedeværelse uten mobil på bordet',
+        ],
+      },
+      {
+        prompt: 'Hvilken spontan fredagsplan frister mest akkurat nå?',
+        options: [
+          'Teste et nytt lite spisested ingen av oss har prøvd',
+          'Pakke sekken for solnedgang og bålkaffe',
+          'Gå på utstilling eller konsert vi bestemmer i siste liten',
+        ],
+      },
+      {
+        prompt: 'Hva er din hemmelige styrke i et forhold?',
+        options: [
+          'Lager alltid god stemning (og veldig god frokost)',
+          'Husker de små detaljene du nevnte i forbifarten',
+          'Tar initiativ til nye opplevelser og eventyr sammen',
+        ],
+      },
+    ],
+  },
 };
 
 const PROFILE_READ_RECEIPTS: Record<string, boolean> = {
@@ -527,7 +798,276 @@ function createInitialState(): ServerState {
         ],
       },
     ],
+    gamification: {
+      xp: 0,
+      level: 1,
+      levelTitle: 'Nysgjerrig Gnist',
+      currentLevelBaseXp: 0,
+      nextLevelXp: 180,
+      superSparks: 1,
+      loginStreak: 2,
+      lastClaimedDate: null,
+      canClaimToday: true,
+      currentCycleDay: 3,
+      icebreakersSentCount: 1,
+      gamesPlayedCount: 0,
+      datesProposedCount: 0,
+      dailyRewards: [],
+      achievements: [],
+      claimBonusXp: 125,
+      unlockedTimestamps: {},
+    },
   };
+}
+
+function getYesterdayDateKey(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return getTodayDateKey(d);
+}
+
+function recomputeGamification(targetState: ServerState): GamificationState {
+  const prevGam = (targetState.gamification || {}) as Partial<GamificationState>;
+  const todayKey = getTodayDateKey();
+  const yesterdayKey = getYesterdayDateKey();
+
+  const lastClaimedDate =
+    typeof prevGam.lastClaimedDate === 'string' ? prevGam.lastClaimedDate : null;
+
+  let loginStreak =
+    typeof prevGam.loginStreak === 'number' && Number.isFinite(prevGam.loginStreak)
+      ? Math.max(0, Math.round(prevGam.loginStreak))
+      : 2;
+
+  if (
+    lastClaimedDate &&
+    lastClaimedDate !== todayKey &&
+    lastClaimedDate !== yesterdayKey
+  ) {
+    loginStreak = 0;
+  }
+
+  const canClaimToday = lastClaimedDate !== todayKey;
+  const activeStepNumber = canClaimToday
+    ? (loginStreak % 7) + 1
+    : ((Math.max(1, loginStreak) - 1) % 7) + 1;
+
+  const dailyRewards: DailyRewardStep[] = DAILY_REWARD_SCHEDULE.map((step) => ({
+    day: step.day,
+    label: step.label,
+    xp: step.xp,
+    bonusSparks: step.bonusSparks,
+    claimed: canClaimToday
+      ? step.day < activeStepNumber
+      : step.day <= activeStepNumber,
+    isCurrent: step.day === activeStepNumber,
+  }));
+
+  // Count real user milestones across the entire state
+  let icebreakersSentCount = 0;
+  let gamesPlayedCount = 0;
+  let datesProposedCount = 0;
+
+  for (const msgs of Object.values(targetState.messagesByMatch || {})) {
+    if (!Array.isArray(msgs)) continue;
+    for (const msg of msgs) {
+      if (msg.senderId === targetState.currentUser.id && msg.isIcebreaker) {
+        icebreakersSentCount += 1;
+      }
+      if (msg.gameSession) {
+        gamesPlayedCount += 1;
+      }
+      if (
+        msg.meetingProposal &&
+        (msg.senderId === targetState.currentUser.id ||
+          Boolean(msg.meetingProposal.addedToGoogleCalendarEventId))
+      ) {
+        datesProposedCount += 1;
+      }
+    }
+  }
+
+  const u = targetState.currentUser;
+  const photoCount = Array.isArray(u.photos) ? u.photos.length : 2;
+  let profileCompletionParts = 0;
+  if (u.bio && u.bio.trim().length >= 30) profileCompletionParts += 1;
+  if (u.occupation && u.occupation.trim().length >= 2)
+    profileCompletionParts += 1;
+  if (Array.isArray(u.interests) && u.interests.length >= 3)
+    profileCompletionParts += 1;
+  if (photoCount >= 2) profileCompletionParts += 1;
+
+  const matchesCount = Array.isArray(targetState.matches)
+    ? targetState.matches.length
+    : 0;
+  const verifiedOrVideo = u.verified || Boolean(u.videoIntroUrl) ? 1 : 0;
+  const streakClaimedFlag = lastClaimedDate ? 1 : 0;
+  const dailyGoalReachedFlag =
+    targetState.swipeStats.dailyCount >= targetState.swipeStats.dailyGoal ? 1 : 0;
+
+  const unlockedTimestamps: Record<string, string> = {
+    ...(prevGam.unlockedTimestamps || {}),
+  };
+
+  const rawDefinitions: Array<{
+    id: string;
+    title: string;
+    description: string;
+    icon: AchievementIconKey;
+    xpReward: number;
+    progress: number;
+    target: number;
+  }> = [
+    {
+      id: 'complete_profile',
+      title: 'Komplett profil',
+      description: 'Fyll ut biografi, yrke, minst 3 interesser og 2 profilbilder',
+      icon: 'profile',
+      xpReward: 120,
+      progress: profileCompletionParts,
+      target: 4,
+    },
+    {
+      id: 'icebreaker_sender',
+      title: 'Isbryteren',
+      description: 'Send minst 1 samtalestarter (icebreaker) til en match',
+      icon: 'icebreaker',
+      xpReward: 80,
+      progress: icebreakersSentCount,
+      target: 1,
+    },
+    {
+      id: 'first_match',
+      title: 'Første Gnist',
+      description: 'Få din første gjensidige match i Gnist',
+      icon: 'match',
+      xpReward: 100,
+      progress: matchesCount,
+      target: 1,
+    },
+    {
+      id: 'match_magnet',
+      title: 'Match-magnet',
+      description: 'Oppnå 3 gjensidige matcher med andre brukere',
+      icon: 'match',
+      xpReward: 200,
+      progress: matchesCount,
+      target: 3,
+    },
+    {
+      id: 'verified_star',
+      title: 'Trygg & Verifisert',
+      description: 'Fullfør selfie-verifisering eller 15s video-introduksjon',
+      icon: 'verified',
+      xpReward: 150,
+      progress: verifiedOrVideo,
+      target: 1,
+    },
+    {
+      id: 'date_planner',
+      title: 'Date-planlegger',
+      description:
+        'Foreslå møtetidspunkt eller synkroniser avtale med Google Calendar',
+      icon: 'calendar',
+      xpReward: 150,
+      progress: datesProposedCount,
+      target: 1,
+    },
+    {
+      id: 'game_player',
+      title: 'Spillmester',
+      description: 'Start et spørsmålsspill i Spill-biblioteket med en match',
+      icon: 'game',
+      xpReward: 110,
+      progress: gamesPlayedCount,
+      target: 1,
+    },
+    {
+      id: 'daily_streak',
+      title: 'Daglig Gnist',
+      description: 'Hent en daglig innloggingsbelønning eller nå dagens sveipemål',
+      icon: 'streak',
+      xpReward: 90,
+      progress: Math.max(streakClaimedFlag, dailyGoalReachedFlag),
+      target: 1,
+    },
+  ];
+
+  const todayFormatted = new Date().toLocaleDateString('nb-NO', {
+    day: 'numeric',
+    month: 'short',
+  });
+
+  let achievementXp = 0;
+  const achievements: AchievementBadge[] = rawDefinitions.map((def) => {
+    const previouslyUnlocked = Boolean(unlockedTimestamps[def.id]);
+    const unlockedNow = def.progress >= def.target || previouslyUnlocked;
+    if (unlockedNow && !unlockedTimestamps[def.id]) {
+      unlockedTimestamps[def.id] = todayFormatted;
+    }
+    if (unlockedNow) {
+      achievementXp += def.xpReward;
+    }
+    return {
+      ...def,
+      progress: unlockedNow ? Math.max(def.progress, def.target) : def.progress,
+      unlocked: unlockedNow,
+      unlockedAt: unlockedTimestamps[def.id] || null,
+    };
+  });
+
+  const claimBonusXp =
+    typeof prevGam.claimBonusXp === 'number' && Number.isFinite(prevGam.claimBonusXp)
+      ? Math.max(0, Math.round(prevGam.claimBonusXp))
+      : 125;
+
+  const activityXp =
+    matchesCount * 25 +
+    icebreakersSentCount * 15 +
+    gamesPlayedCount * 20 +
+    datesProposedCount * 25;
+
+  const totalXp = claimBonusXp + achievementXp + activityXp;
+
+  let levelIdx = 0;
+  for (let i = 0; i < LEVEL_THRESHOLDS.length; i += 1) {
+    if (totalXp >= LEVEL_THRESHOLDS[i].baseXp) {
+      levelIdx = i;
+    }
+  }
+  const currentLevel = levelIdx + 1;
+  const currentLevelBaseXp = LEVEL_THRESHOLDS[levelIdx].baseXp;
+  const nextLevelXp =
+    LEVEL_THRESHOLDS[levelIdx + 1]?.baseXp || currentLevelBaseXp + 400;
+  const levelTitle = LEVEL_THRESHOLDS[levelIdx].title;
+
+  const superSparks =
+    typeof prevGam.superSparks === 'number' && Number.isFinite(prevGam.superSparks)
+      ? Math.max(0, Math.round(prevGam.superSparks))
+      : 1;
+
+  const computed: GamificationState = {
+    xp: totalXp,
+    level: currentLevel,
+    levelTitle,
+    currentLevelBaseXp,
+    nextLevelXp,
+    superSparks,
+    loginStreak,
+    lastClaimedDate,
+    canClaimToday,
+    currentCycleDay: activeStepNumber,
+    icebreakersSentCount,
+    gamesPlayedCount,
+    datesProposedCount,
+    dailyRewards,
+    achievements,
+    claimBonusXp,
+    unlockedTimestamps,
+  };
+
+  targetState.gamification = computed;
+  return computed;
 }
 
 function loadState(): ServerState {
@@ -635,7 +1175,7 @@ function loadState(): ServerState {
         ).length;
       }
 
-      return {
+      const loaded: ServerState = {
         ...defaults,
         ...raw,
         matches: migratedMatches,
@@ -660,11 +1200,18 @@ function loadState(): ServerState {
         reportedUsers: Array.isArray(raw.reportedUsers)
           ? raw.reportedUsers
           : [],
+        gamification: {
+          ...defaults.gamification,
+          ...(raw.gamification || {}),
+        },
       };
+      recomputeGamification(loaded);
+      return loaded;
     }
   } catch {
     // Fallback to clean initial state
   }
+  recomputeGamification(defaults);
   return defaults;
 }
 
@@ -681,6 +1228,7 @@ function syncDailySwipeRollover(): boolean {
 }
 
 function persistState() {
+  recomputeGamification(state);
   try {
     fs.writeFileSync(PERSIST_FILE, JSON.stringify(state), 'utf-8');
   } catch {
@@ -1676,10 +2224,488 @@ async function startServer() {
   app.get('/api/state', (_req, res) => {
     const rolledOver = syncDailySwipeRollover();
     const pruned = pruneExpiredLiveLocations();
+    recomputeGamification(state);
     if (rolledOver && !pruned) {
       persistState();
     }
     res.json(state);
+  });
+
+  app.post('/api/gamification/claim-daily', (_req, res) => {
+    const todayKey = getTodayDateKey();
+    const yesterdayKey = getYesterdayDateKey();
+    recomputeGamification(state);
+
+    if (state.gamification.lastClaimedDate === todayKey) {
+      res.json({
+        ok: true,
+        alreadyClaimed: true,
+        gamification: state.gamification,
+        state,
+      });
+      return;
+    }
+
+    const continuingStreak =
+      state.gamification.lastClaimedDate === yesterdayKey ||
+      state.gamification.lastClaimedDate === null;
+
+    const nextStreak = continuingStreak
+      ? state.gamification.loginStreak + 1
+      : 1;
+    const cycleDay = ((nextStreak - 1) % 7) + 1;
+    const rewardDef =
+      DAILY_REWARD_SCHEDULE.find((r) => r.day === cycleDay) ||
+      DAILY_REWARD_SCHEDULE[0];
+
+    state.gamification.loginStreak = nextStreak;
+    state.gamification.lastClaimedDate = todayKey;
+    state.gamification.claimBonusXp =
+      (state.gamification.claimBonusXp || 0) + rewardDef.xp;
+    state.gamification.superSparks =
+      (state.gamification.superSparks || 0) + rewardDef.bonusSparks;
+
+    persistState();
+    broadcast('state:sync', state);
+
+    res.json({
+      ok: true,
+      xpEarned: rewardDef.xp,
+      bonusSparks: rewardDef.bonusSparks,
+      streak: nextStreak,
+      gamification: state.gamification,
+      state,
+    });
+  });
+
+  function hashString(input: string): number {
+    let h = 0;
+    for (let i = 0; i < input.length; i += 1) {
+      h = (h * 31 + input.charCodeAt(i)) >>> 0;
+    }
+    return h;
+  }
+
+  app.get('/api/matches/:matchId/availability', (req, res) => {
+    const { matchId } = req.params;
+    const match = state.matches.find((m) => m.id === matchId);
+    if (!match || isProfileBlocked(match.profileId)) {
+      res.status(404).json({ error: 'Fant ikke samtale' });
+      return;
+    }
+
+    const partnerId = match.profileId;
+    const partnerName = PROFILE_DISPLAY_NAMES[partnerId] || 'Match';
+    const partnerCity = PROFILE_CITIES[partnerId] || state.currentUser.city;
+
+    const now = new Date();
+    const busyIntervals: Array<{
+      startIso: string;
+      endIso: string;
+      label: string;
+    }> = [];
+
+    for (let dayOffset = 0; dayOffset < 8; dayOffset += 1) {
+      const d = new Date(now);
+      d.setDate(now.getDate() + dayOffset);
+      d.setSeconds(0, 0);
+      const dow = d.getDay();
+      const seed = hashString(`${partnerId}-${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`);
+
+      if (dow !== 0 && dow !== 6) {
+        const workStart = new Date(d);
+        workStart.setHours(8, 30, 0, 0);
+        const workEnd = new Date(d);
+        workEnd.setHours(16, 30, 0, 0);
+        busyIntervals.push({
+          startIso: workStart.toISOString(),
+          endIso: workEnd.toISOString(),
+          label: 'Jobb',
+        });
+
+        // Deterministic evening commitment on ~1 of 3 weekdays
+        if (seed % 3 === 0) {
+          const eveStart = new Date(d);
+          eveStart.setHours(17, 15, 0, 0);
+          const eveEnd = new Date(d);
+          eveEnd.setHours(19, 0, 0, 0);
+          busyIntervals.push({
+            startIso: eveStart.toISOString(),
+            endIso: eveEnd.toISOString(),
+            label: 'Trening / avtale',
+          });
+        } else if (seed % 4 === 1) {
+          const lateStart = new Date(d);
+          lateStart.setHours(19, 0, 0, 0);
+          const lateEnd = new Date(d);
+          lateEnd.setHours(21, 0, 0, 0);
+          busyIntervals.push({
+            startIso: lateStart.toISOString(),
+            endIso: lateEnd.toISOString(),
+            label: 'Middag med venner',
+          });
+        }
+      } else if (seed % 2 === 0) {
+        const wkStart = new Date(d);
+        wkStart.setHours(14, 30, 0, 0);
+        const wkEnd = new Date(d);
+        wkEnd.setHours(17, 0, 0, 0);
+        busyIntervals.push({
+          startIso: wkStart.toISOString(),
+          endIso: wkEnd.toISOString(),
+          label: 'Helgeavtale',
+        });
+      }
+    }
+
+    res.json({
+      matchId,
+      partnerId,
+      partnerName,
+      partnerCity,
+      busyIntervals,
+      preferredNote: `${partnerName} har delt ledig/opptatt-kalender for neste 7 dager i ${partnerCity}.`,
+    });
+  });
+
+  app.post('/api/matches/:matchId/meeting-proposals', (req, res) => {
+    const { matchId } = req.params;
+    const { slots, userCalendarChecked = false, note } = (req.body || {}) as {
+      slots?: ProposedTimeSlot[];
+      userCalendarChecked?: boolean;
+      note?: string;
+    };
+
+    const match = state.matches.find((m) => m.id === matchId);
+    if (!match || isProfileBlocked(match.profileId)) {
+      res.status(404).json({ error: 'Fant ikke gyldig samtale' });
+      return;
+    }
+
+    if (!Array.isArray(slots) || slots.length === 0) {
+      res.status(400).json({ error: 'Mangler tidsluker for møteforslaget' });
+      return;
+    }
+
+    const cleanSlots = slots.slice(0, 3).map((s, idx) => ({
+      id: String(s.id || `slot-${idx}-${Date.now()}`),
+      startIso: String(s.startIso),
+      endIso: String(s.endIso),
+      dayLabel: String(s.dayLabel),
+      timeRangeLabel: String(s.timeRangeLabel),
+      activitySuggestion: String(s.activitySuggestion || 'Kaffeprat'),
+    }));
+
+    const partnerIdx =
+      hashString(`${match.profileId}-${cleanSlots[0]?.startIso || ''}`) %
+      cleanSlots.length;
+    const partnerSuggestedSlotId = cleanSlots[partnerIdx]?.id || null;
+
+    const nowIso = new Date().toISOString();
+    const proposal: MeetingProposalShare = {
+      proposalId: `prop-${Date.now()}`,
+      slots: cleanSlots,
+      selectedSlotId: null,
+      selectedById: null,
+      selectedByName: null,
+      partnerSuggestedSlotId,
+      userCalendarChecked: Boolean(userCalendarChecked),
+      note: typeof note === 'string' && note.trim() ? note.trim().slice(0, 220) : null,
+      addedToGoogleCalendarEventId: null,
+      addedToGoogleCalendarLink: null,
+      createdAtIso: nowIso,
+      updatedAtIso: nowIso,
+    };
+
+    if (!state.messagesByMatch[matchId]) {
+      state.messagesByMatch[matchId] = [];
+    }
+
+    const message: ChatMessage = {
+      id: `msg-prop-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      matchId,
+      senderId: state.currentUser.id,
+      senderName: state.currentUser.name,
+      text:
+        proposal.note ||
+        `Foreslo ${cleanSlots.length} ledige tidspunkter for en date`,
+      createdAt: formatNowTime(),
+      readAt: null,
+      meetingProposal: proposal,
+    };
+
+    state.messagesByMatch[matchId].push(message);
+    match.unreadCount = 0;
+
+    persistState();
+    broadcast('chat:message', { matchId, message });
+    broadcast('state:sync', state);
+
+    res.json({ ok: true, message, state });
+  });
+
+  app.post(
+    '/api/matches/:matchId/meeting-proposals/:messageId/select',
+    (req, res) => {
+      const { matchId, messageId } = req.params;
+      const { slotId } = (req.body || {}) as { slotId?: string };
+
+      const thread = state.messagesByMatch[matchId];
+      if (!Array.isArray(thread)) {
+        res.status(404).json({ error: 'Fant ikke samtale' });
+        return;
+      }
+
+      const target = thread.find(
+        (m) => m.id === messageId && m.meetingProposal
+      );
+      if (!target || !target.meetingProposal) {
+        res.status(404).json({ error: 'Fant ikke møteforslag' });
+        return;
+      }
+
+      const validSlot = target.meetingProposal.slots.find(
+        (s) => s.id === slotId
+      );
+      if (!validSlot) {
+        res.status(400).json({ error: 'Ugyldig tidspunkt valgt' });
+        return;
+      }
+
+      const match = state.matches.find((m) => m.id === matchId);
+      const partnerName = match
+        ? PROFILE_DISPLAY_NAMES[match.profileId] || 'Match'
+        : 'Match';
+
+      target.meetingProposal = {
+        ...target.meetingProposal,
+        selectedSlotId: validSlot.id,
+        selectedById: state.currentUser.id,
+        selectedByName: partnerName,
+        updatedAtIso: new Date().toISOString(),
+      };
+
+      persistState();
+      broadcast('meeting:updated', {
+        matchId,
+        messageId: target.id,
+        meetingProposal: target.meetingProposal,
+      });
+      broadcast('state:sync', state);
+
+      res.json({ ok: true, message: target, state });
+    }
+  );
+
+  app.post(
+    '/api/matches/:matchId/meeting-proposals/:messageId/calendar-synced',
+    (req, res) => {
+      const { matchId, messageId } = req.params;
+      const { eventId, htmlLink } = (req.body || {}) as {
+        eventId?: string;
+        htmlLink?: string;
+      };
+
+      const thread = state.messagesByMatch[matchId];
+      const target = Array.isArray(thread)
+        ? thread.find((m) => m.id === messageId && m.meetingProposal)
+        : undefined;
+
+      if (!target || !target.meetingProposal) {
+        res.status(404).json({ error: 'Fant ikke møteforslag' });
+        return;
+      }
+
+      target.meetingProposal = {
+        ...target.meetingProposal,
+        addedToGoogleCalendarEventId: String(eventId || `evt-${Date.now()}`),
+        addedToGoogleCalendarLink: String(
+          htmlLink || 'https://calendar.google.com'
+        ),
+        updatedAtIso: new Date().toISOString(),
+      };
+
+      persistState();
+      broadcast('meeting:updated', {
+        matchId,
+        messageId: target.id,
+        meetingProposal: target.meetingProposal,
+      });
+      broadcast('state:sync', state);
+
+      res.json({ ok: true, message: target, state });
+    }
+  );
+
+  app.post('/api/matches/:matchId/games/start', (req, res) => {
+    const { matchId } = req.params;
+    const { gameId } = (req.body || {}) as { gameId?: ChatGameId };
+
+    const match = state.matches.find((m) => m.id === matchId);
+    if (!match || isProfileBlocked(match.profileId)) {
+      res.status(404).json({ error: 'Fant ikke gyldig samtale' });
+      return;
+    }
+
+    const bankKey: ChatGameId =
+      gameId === 'would_you_rather' ||
+      gameId === 'this_or_that' ||
+      gameId === 'spark_quiz'
+        ? gameId
+        : 'would_you_rather';
+
+    const bank = GAME_QUESTION_BANKS[bankKey];
+    const existingGamesCount = (state.messagesByMatch[matchId] || []).filter(
+      (m) => m.gameSession?.gameId === bankKey
+    ).length;
+
+    const rotated = [...bank.questions];
+    if (existingGamesCount > 0 && rotated.length > 1) {
+      const offset = existingGamesCount % rotated.length;
+      rotated.push(...rotated.splice(0, offset));
+    }
+
+    const selectedQuestions = rotated.slice(0, bank.roundCount);
+    const rounds: ChatGameRound[] = selectedQuestions.map((q, idx) => ({
+      roundIndex: idx,
+      prompt: q.prompt,
+      options: q.options,
+      myChoiceIndex: null,
+      partnerChoiceIndex: null,
+    }));
+
+    const session: ChatGameSession = {
+      sessionId: `game-${Date.now()}`,
+      gameId: bankKey,
+      gameTitle: bank.title,
+      gameSubtitle: bank.subtitle,
+      currentRoundIndex: 0,
+      totalRounds: rounds.length,
+      rounds,
+      matchedChoicesCount: 0,
+      status: 'active',
+      startedByName: state.currentUser.name,
+      updatedAtIso: new Date().toISOString(),
+    };
+
+    if (!state.messagesByMatch[matchId]) {
+      state.messagesByMatch[matchId] = [];
+    }
+
+    const message: ChatMessage = {
+      id: `msg-game-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      matchId,
+      senderId: state.currentUser.id,
+      senderName: state.currentUser.name,
+      text: `Startet spillet «${bank.title}»`,
+      createdAt: formatNowTime(),
+      readAt: null,
+      gameSession: session,
+    };
+
+    state.messagesByMatch[matchId].push(message);
+    match.unreadCount = 0;
+
+    persistState();
+    broadcast('chat:message', { matchId, message });
+    broadcast('state:sync', state);
+
+    res.json({ ok: true, message, state });
+  });
+
+  app.post(
+    '/api/matches/:matchId/games/:messageId/answer',
+    (req, res) => {
+      const { matchId, messageId } = req.params;
+      const { roundIndex, choiceIndex } = (req.body || {}) as {
+        roundIndex?: number;
+        choiceIndex?: number;
+      };
+
+      const match = state.matches.find((m) => m.id === matchId);
+      const thread = state.messagesByMatch[matchId];
+      const target = Array.isArray(thread)
+        ? thread.find((m) => m.id === messageId && m.gameSession)
+        : undefined;
+
+      if (!match || !target || !target.gameSession) {
+        res.status(404).json({ error: 'Fant ikke aktivt spill i samtalen' });
+        return;
+      }
+
+      const session = target.gameSession;
+      const rIdx =
+        typeof roundIndex === 'number'
+          ? roundIndex
+          : session.currentRoundIndex;
+      const round = session.rounds[rIdx];
+      if (
+        !round ||
+        typeof choiceIndex !== 'number' ||
+        choiceIndex < 0 ||
+        choiceIndex >= round.options.length
+      ) {
+        res.status(400).json({ error: 'Ugyldig svarvalg' });
+        return;
+      }
+
+      if (round.myChoiceIndex === null) {
+        round.myChoiceIndex = choiceIndex;
+        const partnerPick =
+          hashString(`${match.profileId}-${round.prompt}-${session.sessionId}`) %
+          round.options.length;
+        round.partnerChoiceIndex = partnerPick;
+
+        session.matchedChoicesCount = session.rounds.filter(
+          (r) =>
+            r.myChoiceIndex !== null &&
+            r.partnerChoiceIndex !== null &&
+            r.myChoiceIndex === r.partnerChoiceIndex
+        ).length;
+        session.updatedAtIso = new Date().toISOString();
+      }
+
+      persistState();
+      broadcast('game:updated', {
+        matchId,
+        messageId: target.id,
+        gameSession: session,
+      });
+      broadcast('state:sync', state);
+
+      res.json({ ok: true, message: target, state });
+    }
+  );
+
+  app.post('/api/matches/:matchId/games/:messageId/next', (req, res) => {
+    const { matchId, messageId } = req.params;
+    const thread = state.messagesByMatch[matchId];
+    const target = Array.isArray(thread)
+      ? thread.find((m) => m.id === messageId && m.gameSession)
+      : undefined;
+
+    if (!target || !target.gameSession) {
+      res.status(404).json({ error: 'Fant ikke spill i samtalen' });
+      return;
+    }
+
+    const session = target.gameSession;
+    if (session.currentRoundIndex < session.totalRounds - 1) {
+      session.currentRoundIndex += 1;
+    } else {
+      session.status = 'completed';
+    }
+    session.updatedAtIso = new Date().toISOString();
+
+    persistState();
+    broadcast('game:updated', {
+      matchId,
+      messageId: target.id,
+      gameSession: session,
+    });
+    broadcast('state:sync', state);
+
+    res.json({ ok: true, message: target, state });
   });
 
   app.post('/api/swipe', async (req, res) => {

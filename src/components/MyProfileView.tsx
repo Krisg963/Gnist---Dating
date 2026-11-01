@@ -43,13 +43,26 @@ import type {
   DatingCoachRequestPayload,
   DatingProfile,
   EducationLevel,
+  GamificationState,
+  ProfileAchievementSummary,
   RelationshipGoal,
   SwipeHistoryEntry,
   SwipeStats,
   ThemeMode,
 } from '../types';
+import {
+  disconnectGoogleCalendar,
+  getGoogleCalendarAuthSnapshot,
+  signInWithGoogleCalendar,
+  subscribeGoogleCalendarAuth,
+} from '../services/googleCalendarService';
 import { PWAInstallControl, SafeImage, VerifiedBadge } from './CommonUI';
 import { DatingCoachModule } from './DatingCoachModule';
+import {
+  GamificationHubCard,
+  ProfileAchievementsDisplay,
+} from './GamificationModules';
+import { GoogleSignInButton } from './GoogleSignInButton';
 import { InterestBadges } from './InterestBadges';
 
 interface ThemeControlsProps {
@@ -75,6 +88,7 @@ interface PushControlsProps {
 
 interface MyProfileViewProps {
   currentUser: CurrentUser;
+  gamification: GamificationState;
   swipeStats: SwipeStats;
   swipeHistory: SwipeHistoryEntry[];
   matchesCount: number;
@@ -83,6 +97,12 @@ interface MyProfileViewProps {
   matchingCountsByInterest: Record<string, number>;
   themeControls: ThemeControlsProps;
   pushControls: PushControlsProps;
+  onClaimDailyReward: () => Promise<{
+    ok: boolean;
+    xpEarned?: number;
+    bonusSparks?: number;
+    streak?: number;
+  }>;
   onSaveProfile: (updates: Partial<CurrentUser>) => Promise<boolean>;
   onUpdateDailyGoal: (dailyGoal: number) => Promise<boolean>;
   onGoToSwipe: () => void;
@@ -142,6 +162,7 @@ function compressImageFile(file: File): Promise<string> {
 
 export const MyProfileView: React.FC<MyProfileViewProps> = ({
   currentUser,
+  gamification,
   swipeStats,
   swipeHistory,
   matchesCount,
@@ -150,6 +171,7 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
   matchingCountsByInterest,
   themeControls,
   pushControls,
+  onClaimDailyReward,
   onSaveProfile,
   onUpdateDailyGoal,
   onGoToSwipe,
@@ -165,6 +187,18 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
   const prefersReducedMotion = Boolean(useReducedMotion());
   const savedPhotos =
     currentUser.photos !== null ? currentUser.photos : DEFAULT_USER_PHOTOS;
+
+  // Google Calendar Connection State
+  const [calendarAuth, setCalendarAuth] = useState(() =>
+    getGoogleCalendarAuthSnapshot()
+  );
+  const [calendarSigningIn, setCalendarSigningIn] = useState(false);
+
+  useEffect(() => {
+    return subscribeGoogleCalendarAuth((next) => {
+      setCalendarAuth(next);
+    });
+  }, []);
 
   // Form State
   const [name, setName] = useState(currentUser.name);
@@ -390,6 +424,17 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
   const activePublicPhoto =
     publicPhotos[previewPhotoIdx] || publicPhotos[0] || '';
 
+  const unlockedProfileBadges: ProfileAchievementSummary[] =
+    gamification.achievements
+      .filter((a) => a.unlocked)
+      .map((a) => ({
+        id: a.id,
+        title: a.title,
+        description: a.description,
+        icon: a.icon,
+        unlockedAt: a.unlockedAt || undefined,
+      }));
+
   const publicProfileData: DatingProfile = {
     id: currentUser.id,
     name: currentUser.name,
@@ -413,6 +458,9 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
     videoIntroPrompt: currentUser.videoIntroPrompt,
     icebreakers: ['Hei!', 'Hvordan går det?', 'Lyst til å ta en kaffe?'],
     readReceiptsEnabled: currentUser.readReceiptsEnabled,
+    achievements: unlockedProfileBadges,
+    level: gamification.level,
+    levelTitle: gamification.levelTitle,
     isCurrentUserPreview: true,
   };
 
@@ -450,8 +498,14 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
-        {/* Left Column (7 cols): Interactive Interest Badges + Swipe Statistics Module + Swipe History + Profile Editor Form */}
+        {/* Left Column (7 cols): Gamification Hub + Interactive Interest Badges + Swipe Statistics Module + Swipe History + Profile Editor Form */}
         <div className="lg:col-span-7 space-y-6">
+          {/* GAMIFICATION HUB: DAGLIGE INNLOGGINGSBELØNNINGER & PRESTASJONER */}
+          <GamificationHubCard
+            gamification={gamification}
+            onClaimDailyReward={onClaimDailyReward}
+          />
+
           {/* 0. INTERAKTIVE INTERESSE-MERKER MODUL */}
           <div className="rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5 sm:p-7 shadow-xs space-y-3">
             <div className="flex items-start justify-between gap-3">
@@ -1627,7 +1681,57 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
                   />
                 </div>
               )}
+
+              {unlockedProfileBadges.length > 0 && (
+                <div className="pt-3 border-t border-zinc-100 dark:border-zinc-800">
+                  <ProfileAchievementsDisplay
+                    achievements={unlockedProfileBadges}
+                    level={gamification.level}
+                    levelTitle={gamification.levelTitle}
+                    compact
+                    heading="Prestasjoner på profilen din"
+                  />
+                </div>
+              )}
             </div>
+          </div>
+
+          {/* GOOGLE CALENDAR INTEGRATION CARD */}
+          <div className="rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5 sm:p-6 shadow-xs space-y-3.5">
+            <div>
+              <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-50">
+                Google Calendar-integrasjon
+              </h3>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 leading-relaxed">
+                {calendarAuth.connected
+                  ? `Tilkoblet${
+                      calendarAuth.email ? ` (${calendarAuth.email})` : ''
+                    } — ledig/opptatt-tider brukes i «Foreslå møtetidspunkt» i samtaleloggen.`
+                  : 'Koble til Google Calendar for å finne 3 ledige tidsluker for en date og legge til bekreftede møter direkte i kalenderen din.'}
+              </p>
+            </div>
+
+            {calendarAuth.connected ? (
+              <button
+                type="button"
+                onClick={() => void disconnectGoogleCalendar()}
+                className="w-full min-h-[44px] px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-xs sm:text-sm font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition whitespace-nowrap"
+              >
+                Koble fra Google Calendar
+              </button>
+            ) : (
+              <div className="flex">
+                <GoogleSignInButton
+                  loading={calendarSigningIn}
+                  label="Logg inn med Google"
+                  onClick={async () => {
+                    setCalendarSigningIn(true);
+                    await signInWithGoogleCalendar();
+                    setCalendarSigningIn(false);
+                  }}
+                />
+              </div>
+            )}
           </div>
 
           {/* 15-SECOND VIDEO INTRODUCTION STUDIO CARD */}
