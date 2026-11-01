@@ -3,6 +3,9 @@ import { getOrCreateClientId } from './usePushNotifications';
 import type {
   ChatMessage,
   CurrentUser,
+  DatingCoachAdvice,
+  DatingCoachRequestPayload,
+  DatingProfile,
   LiveLocationShare,
   LiveStreamRoom,
   MatchRecord,
@@ -1312,6 +1315,114 @@ export function useRealtimeApp() {
     [clearLocationWatcherForMatch]
   );
 
+  const requestDatingCoach = useCallback(
+    async (
+      payload: DatingCoachRequestPayload
+    ): Promise<{
+      ok: boolean;
+      advice?: DatingCoachAdvice;
+      error?: string;
+    }> => {
+      try {
+        const res = await fetch('/api/ai/dating-coach', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = (await res.json()) as {
+          ok?: boolean;
+          advice?: DatingCoachAdvice;
+          error?: string;
+        };
+        if (!res.ok || !data.advice) {
+          return {
+            ok: false,
+            error:
+              data.error ||
+              'Kunne ikke hente råd fra Dating-coach akkurat nå.',
+          };
+        }
+        return { ok: true, advice: data.advice };
+      } catch {
+        return {
+          ok: false,
+          error:
+            'Ingen forbindelse til serveren. Sjekk nettverket ditt og prøv igjen.',
+        };
+      }
+    },
+    []
+  );
+
+  const generateMatchIcebreakers = useCallback(
+    async (
+      matchId: string,
+      partner: DatingProfile,
+      previousIcebreakers?: string[]
+    ): Promise<{
+      ok: boolean;
+      icebreakers?: [string, string, string];
+      error?: string;
+    }> => {
+      try {
+        const res = await fetch('/api/ai/icebreakers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            matchId,
+            partner: {
+              id: partner.id,
+              name: partner.name,
+              age: partner.age,
+              city: partner.city,
+              occupation: partner.occupation,
+              relationshipGoal: partner.relationshipGoal,
+              bio: partner.bio,
+              interests: partner.interests,
+            },
+            previousIcebreakers,
+          }),
+        });
+
+        const data = (await res.json()) as {
+          ok?: boolean;
+          icebreakers?: [string, string, string];
+          state?: ServerState;
+          error?: string;
+        };
+
+        if (!res.ok || !data.icebreakers) {
+          return {
+            ok: false,
+            error:
+              data.error ||
+              'Kunne ikke generere nye samtalestartere akkurat nå.',
+          };
+        }
+
+        if (data.state) {
+          setServerState(data.state);
+        } else {
+          setServerState((prev) => ({
+            ...prev,
+            matches: prev.matches.map((m) =>
+              m.id === matchId ? { ...m, icebreakers: data.icebreakers! } : m
+            ),
+          }));
+        }
+
+        return { ok: true, icebreakers: data.icebreakers };
+      } catch {
+        return {
+          ok: false,
+          error:
+            'Ingen forbindelse til serveren. Sjekk nettverket ditt og prøv igjen.',
+        };
+      }
+    },
+    []
+  );
+
   return {
     serverState,
     loading,
@@ -1341,6 +1452,8 @@ export function useRealtimeApp() {
     blockUser,
     unblockUser,
     reportUser,
+    requestDatingCoach,
+    generateMatchIcebreakers,
   };
 }
 

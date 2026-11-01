@@ -39,6 +39,8 @@ import {
 import type {
   BlockedUserRecord,
   CurrentUser,
+  DatingCoachAdvice,
+  DatingCoachRequestPayload,
   DatingProfile,
   EducationLevel,
   RelationshipGoal,
@@ -47,6 +49,7 @@ import type {
   ThemeMode,
 } from '../types';
 import { PWAInstallControl, SafeImage, VerifiedBadge } from './CommonUI';
+import { DatingCoachModule } from './DatingCoachModule';
 import { InterestBadges } from './InterestBadges';
 
 interface ThemeControlsProps {
@@ -90,6 +93,13 @@ interface MyProfileViewProps {
   onDeleteVideoIntro: () => Promise<boolean>;
   onOpenVerificationModal: () => void;
   onPreviewPublicModal: (publicProfile: DatingProfile) => void;
+  onRequestDatingCoach: (
+    payload: DatingCoachRequestPayload
+  ) => Promise<{
+    ok: boolean;
+    advice?: DatingCoachAdvice;
+    error?: string;
+  }>;
 }
 
 const DAILY_GOAL_PRESETS = [3, 5, 10, 15, 25];
@@ -150,6 +160,7 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
   onDeleteVideoIntro,
   onOpenVerificationModal,
   onPreviewPublicModal,
+  onRequestDatingCoach,
 }) => {
   const prefersReducedMotion = Boolean(useReducedMotion());
   const savedPhotos =
@@ -188,7 +199,10 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
   const [historyFilter, setHistoryFilter] = useState<
     'all' | 'right' | 'left'
   >('all');
+
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const photoGalleryRef = useRef<HTMLDivElement | null>(null);
+  const bioTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const goalSavedTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -216,6 +230,26 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
       }
     };
   }, []);
+
+  const handleCoachApplyBio = (nextBio: string) => {
+    setBio(nextBio);
+    setSaveSuccess(false);
+  };
+
+  const handleScrollToBio = () => {
+    bioTextareaRef.current?.scrollIntoView({
+      behavior: prefersReducedMotion ? 'auto' : 'smooth',
+      block: 'center',
+    });
+    bioTextareaRef.current?.focus();
+  };
+
+  const handleScrollToGallery = () => {
+    photoGalleryRef.current?.scrollIntoView({
+      behavior: prefersReducedMotion ? 'auto' : 'smooth',
+      block: 'center',
+    });
+  };
 
   // Daily Swipe Goal Calculation
   const dailyGoal = Math.min(100, Math.max(1, swipeStats.dailyGoal || 5));
@@ -451,6 +485,29 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
               </p>
             )}
           </div>
+
+          {/* 0A. DATING-COACH MODUL (BIO & PROFILBILDER ETTER BESTE PRAKSIS) */}
+          <DatingCoachModule
+            name={name}
+            age={age}
+            city={city}
+            occupation={occupation}
+            education={education}
+            relationshipGoal={relationshipGoal}
+            bio={bio}
+            interests={interests}
+            photos={photos}
+            verified={currentUser.verified}
+            hasVideoIntro={Boolean(currentUser.videoIntroUrl)}
+            onApplyBio={handleCoachApplyBio}
+            onMakePrimaryPhoto={handleMakePrimaryPhoto}
+            onTriggerPhotoUpload={() => fileInputRef.current?.click()}
+            onScrollToBio={handleScrollToBio}
+            onScrollToGallery={handleScrollToGallery}
+            onOpenVerificationModal={onOpenVerificationModal}
+            onOpenVideoIntroModal={onOpenVideoIntroModal}
+            onRequestDatingCoach={onRequestDatingCoach}
+          />
 
           {/* 0B. DAGLIGE SVEIPE-MÅL MODUL */}
           <div className="rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-5 sm:p-7 shadow-xs">
@@ -937,7 +994,7 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
             </div>
 
             {/* Photo Gallery Manager */}
-            <div>
+            <div ref={photoGalleryRef}>
               <div className="flex items-center justify-between mb-2.5">
                 <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
                   Mine profilbilder ({photos.length}/6)
@@ -1171,6 +1228,7 @@ export const MyProfileView: React.FC<MyProfileViewProps> = ({
                 </span>
               </div>
               <textarea
+                ref={bioTextareaRef}
                 id="profile-bio"
                 rows={4}
                 maxLength={400}

@@ -1,3 +1,5 @@
+import 'dotenv/config';
+import { GoogleGenAI, ThinkingLevel, Type } from '@google/genai';
 import express from 'express';
 import fs from 'fs';
 import { createServer } from 'http';
@@ -702,6 +704,126 @@ function formatExactDateTime(date: Date = new Date()): string {
     minute: '2-digit',
   });
   return `${datePart} kl. ${timePart}`;
+}
+
+function getGenAIClient(): GoogleGenAI {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey || !apiKey.trim()) {
+    throw new Error('MISSING_GEMINI_API_KEY');
+  }
+  return new GoogleGenAI({
+    apiKey,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      },
+    },
+  });
+}
+
+function parseInlineImageDataUrl(
+  rawUrl: string
+): { mimeType: string; data: string } | null {
+  const match = rawUrl.match(
+    /^data:(image\/(?:jpeg|jpg|png|webp));base64,([A-Za-z0-9+/=]+)$/i
+  );
+  if (!match) return null;
+  const normalizedMime =
+    match[1].toLowerCase() === 'image/jpg'
+      ? 'image/jpeg'
+      : match[1].toLowerCase();
+  return {
+    mimeType: normalizedMime,
+    data: match[2],
+  };
+}
+
+const LOCAL_IMAGES_DIR = path.join(__dirname, 'src', 'assets', 'images');
+
+function resolvePhotoToInlineData(
+  rawUrl: string
+): { mimeType: string; data: string } | null {
+  const inline = parseInlineImageDataUrl(rawUrl);
+  if (inline) return inline;
+
+  if (!rawUrl || rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
+    return null;
+  }
+
+  try {
+    if (!fs.existsSync(LOCAL_IMAGES_DIR)) return null;
+    const cleanPath = rawUrl.split('?')[0].split('#')[0];
+    const baseName = path.basename(cleanPath);
+    if (!baseName) return null;
+
+    const files = fs.readdirSync(LOCAL_IMAGES_DIR);
+    // Match exact filename or Vite hashed asset filename (e.g. user_maja_main_1793260548621-AbCd12.jpg)
+    const stemWithoutExt = baseName
+      .replace(/\.[a-zA-Z0-9]+$/, '')
+      .replace(/-[A-Za-z0-9_-]{6,}$/, '');
+
+    const matchedFile = files.find(
+      (f) => f === baseName || (stemWithoutExt.length >= 8 && f.startsWith(stemWithoutExt))
+    );
+    if (!matchedFile) return null;
+
+    const ext = path.extname(matchedFile).toLowerCase();
+    const mimeType =
+      ext === '.png'
+        ? 'image/png'
+        : ext === '.webp'
+          ? 'image/webp'
+          : 'image/jpeg';
+
+    const fullPath = path.join(LOCAL_IMAGES_DIR, matchedFile);
+    const buffer = fs.readFileSync(fullPath);
+    if (buffer.byteLength > 4 * 1024 * 1024) return null;
+
+    return {
+      mimeType,
+      data: buffer.toString('base64'),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function mapGeminiErrorToNorwegian(err: unknown): {
+  status: number;
+  message: string;
+} {
+  const rawMsg = err instanceof Error ? err.message : String(err || '');
+  const status =
+    (err as { status?: number })?.status ||
+    (rawMsg.includes('429') ? 429 : rawMsg.includes('403') ? 403 : 500);
+
+  if (
+    rawMsg.includes('MISSING_GEMINI_API_KEY') ||
+    rawMsg.includes('API_KEY_INVALID') ||
+    rawMsg.includes('API key not valid') ||
+    status === 401 ||
+    status === 403
+  ) {
+    return {
+      status: 403,
+      message:
+        'Kunne ikke koble til språkmodellen. Kontroller at GEMINI_API_KEY er lagt inn under Settings > Secrets.',
+    };
+  }
+
+  if (status === 429 || rawMsg.includes('RESOURCE_EXHAUSTED')) {
+    return {
+      status: 429,
+      message:
+        'Tjenesten har mottatt mange forespørsler på kort tid. Vent et lite øyeblikk og prøv igjen.',
+    };
+  }
+
+  return {
+    status: 500,
+    message:
+      'Kunne ikke generere svar akkurat nå. Prøv gjerne igjen om et par sekunder.',
+  };
 }
 
 async function dispatchWebPush(
@@ -1898,6 +2020,406 @@ async function startServer() {
     persistState();
     broadcast('state:sync', state);
     res.json({ ok: true, currentUser: state.currentUser, state });
+  });
+
+  app.post('/api/ai/dating-coach', async (req, res) => {
+    try {
+      const {
+        name,
+        age,
+        city,
+        occupation,
+        education,
+        relationshipGoal,
+        bio,
+        interests,
+        photos,
+        verified,
+        hasVideoIntro,
+      } = (req.body || {}) as {
+        name?: string;
+        age?: number;
+        city?: string;
+        occupation?: string;
+        education?: string;
+        relationshipGoal?: string;
+        bio?: string;
+        interests?: string[];
+        photos?: string[];
+        verified?: boolean;
+        hasVideoIntro?: boolean;
+      };
+
+      const ai = getGenAIClient();
+
+      const cleanName =
+        typeof name === 'string' && name.trim()
+          ? name.trim()
+          : state.currentUser.name;
+      const cleanAge =
+        typeof age === 'number' && Number.isFinite(age)
+          ? age
+          : state.currentUser.age;
+      const cleanCity =
+        typeof city === 'string' && city.trim()
+          ? city.trim()
+          : state.currentUser.city;
+      const cleanOccupation =
+        typeof occupation === 'string'
+          ? occupation.trim()
+          : state.currentUser.occupation;
+      const cleanEducation =
+        typeof education === 'string' && education.trim()
+          ? education.trim()
+          : state.currentUser.education;
+      const cleanGoal =
+        typeof relationshipGoal === 'string' && relationshipGoal.trim()
+          ? relationshipGoal.trim()
+          : state.currentUser.relationshipGoal;
+      const cleanBio =
+        typeof bio === 'string' ? bio.trim() : state.currentUser.bio;
+      const cleanInterests = Array.isArray(interests)
+        ? interests.map((item) => String(item).trim()).filter(Boolean)
+        : state.currentUser.interests;
+      const rawPhotos = Array.isArray(photos) ? photos.slice(0, 6) : [];
+      const photoCount = rawPhotos.length;
+      const isVerified =
+        typeof verified === 'boolean' ? verified : state.currentUser.verified;
+      const videoActive =
+        typeof hasVideoIntro === 'boolean'
+          ? hasVideoIntro
+          : Boolean(state.currentUser.videoIntroUrl);
+
+      const inlineImageParts = rawPhotos
+        .map((src) =>
+          typeof src === 'string' ? resolvePhotoToInlineData(src) : null
+        )
+        .filter((item): item is { mimeType: string; data: string } => Boolean(item))
+        .slice(0, 3)
+        .map((img) => ({
+          inlineData: {
+            mimeType: img.mimeType,
+            data: img.data,
+          },
+        }));
+
+      const promptText = [
+        'Analyser følgende brukerprofil for en moderne norsk dating-app og gi konstruktive, konkrete råd basert på beste praksis for dating-apper:',
+        `- Navn og alder: ${cleanName}, ${cleanAge} år`,
+        `- By: ${cleanCity}`,
+        `- Yrke/studier: ${cleanOccupation || 'Ikke oppgitt'}`,
+        `- Utdanning: ${cleanEducation}`,
+        `- Relasjonsmål: ${cleanGoal}`,
+        `- Interesser (${cleanInterests.length}): ${
+          cleanInterests.length > 0 ? cleanInterests.join(', ') : 'Ingen valgt ennå'
+        }`,
+        `- Nåværende biografi (${cleanBio.length} tegn): "${
+          cleanBio || '(Tom biografi)'
+        }"`,
+        `- Antall profilbilder lagt inn: ${photoCount} av maks 6${
+          inlineImageParts.length > 0
+            ? ` (${inlineImageParts.length} profilbilder er lagt ved visuelt i rekkefølge fra bilde 1 — vurder lys, utsnitt, blikkontakt, smil, variasjon og rekkefølge konkret og vennlig)`
+            : ' (gi konkrete råd basert på antall bilder, rekkefølge og hvordan bildene bør speile interessene)'
+        }`,
+        `- Selfie-verifisert: ${isVerified ? 'Ja' : 'Nei'}`,
+        `- 15-sekunders video-intro: ${videoActive ? 'Ja' : 'Nei'}`,
+        '',
+        'Beste praksis du skal vurdere etter:',
+        '1. Biografi: Vis frem personlighet med spesifikke hverdagsdetaljer («vis, ikke bare fortell») fremfor generelle klisjeer, match tonen med relasjonsmålet, hold lengden rundt 120–280 tegn, og avslutt med en konkret krok eller et spørsmål som gjør det lett å starte en samtale.',
+        '2. Profilbilder: Hovedbildet (bilde 1) bør være et klart portrett i godt dagslys med ekte smil og direkte øyekontakt uten solbriller. Ideelt sett 4–6 varierte bilder som viser helfigur, ekte øyeblikk fra hobbyer/interesser og varme omgivelser uten forvirrende gruppebilder først.',
+        'Svar kun på naturlig, vennlig og konkret norsk (bokmål) uten emojier.',
+      ].join('\n');
+
+      const contents =
+        inlineImageParts.length > 0
+          ? { parts: [...inlineImageParts, { text: promptText }] }
+          : promptText;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.1-flash-lite',
+        contents,
+        config: {
+          thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
+          systemInstruction:
+            'Du er en erfaren, varm og konstruktiv norsk dating-coach. Du gir presise, oppmuntrende og praktiske forbedringsråd for biografi og profilbilder basert på beste praksis for dating-apper, uten klisjeer eller emojier.',
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              summary: {
+                type: Type.STRING,
+                description:
+                  'Kort, varm og ærlig oppsummering på 1–2 setninger om profilens helhetsinntrykk og viktigste løft.',
+              },
+              bioStrengths: {
+                type: Type.STRING,
+                description:
+                  '1 konkret setning om hva som allerede fungerer bra i biografien (eller hvilke interesser brukeren bør bygge på dersom bioen er kort).',
+              },
+              bioTips: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING },
+                description:
+                  'Nøyaktig 3 konkrete og handlingsrettede råd for å forbedre biografien etter beste praksis.',
+              },
+              bioVariants: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    tone: {
+                      type: Type.STRING,
+                      description:
+                        'Kort navn på stilen, f.eks. "Varm og personlig" eller "Leken og nysgjerrig".',
+                    },
+                    text: {
+                      type: Type.STRING,
+                      description:
+                        'Ferdigskrevet norsk biografi (130–270 tegn) tilpasset brukerens interesser, yrke og relasjonsmål, avsluttet med en naturlig samtalestarter.',
+                    },
+                  },
+                  required: ['tone', 'text'],
+                },
+                description:
+                  'Nøyaktig 2 ulike forslag til forbedret biografi med ulik tone.',
+              },
+              photoStrengths: {
+                type: Type.STRING,
+                description:
+                  '1 konkret setning om hva som allerede fungerer fint med nåværende profilbilder eller visuelt uttrykk.',
+              },
+              photoTips: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING },
+                description:
+                  'Nøyaktig 3 konkrete råd for utvalg, rekkefølge, blikkontakt/lys og variasjon i profilbildene basert på beste praksis.',
+              },
+              nextPhotoIdea: {
+                type: Type.STRING,
+                description:
+                  '1 spesifikk og enkel idé til et nytt profilbilde brukeren bør legge til, direkte knyttet til interessene deres.',
+              },
+            },
+            required: [
+              'summary',
+              'bioStrengths',
+              'bioTips',
+              'bioVariants',
+              'photoStrengths',
+              'photoTips',
+              'nextPhotoIdea',
+            ],
+          },
+        },
+      });
+
+      const rawJson = response.text || '{}';
+      const parsed = JSON.parse(rawJson) as {
+        summary?: string;
+        bioStrengths?: string;
+        bioTips?: string[];
+        suggestedBio?: string;
+        bioVariants?: Array<{ tone?: string; text?: string }>;
+        photoStrengths?: string;
+        photoTips?: string[];
+        nextPhotoIdea?: string;
+      };
+
+      const cleanedVariants = Array.isArray(parsed.bioVariants)
+        ? parsed.bioVariants
+            .map((v) => ({
+              tone:
+                typeof v?.tone === 'string' && v.tone.trim()
+                  ? v.tone.trim().slice(0, 40)
+                  : 'Forslag',
+              text:
+                typeof v?.text === 'string' && v.text.trim()
+                  ? v.text.trim().slice(0, 400)
+                  : '',
+            }))
+            .filter((v) => Boolean(v.text))
+            .slice(0, 2)
+        : [];
+
+      const primarySuggestedBio =
+        cleanedVariants[0]?.text ||
+        (typeof parsed.suggestedBio === 'string' && parsed.suggestedBio.trim()
+          ? parsed.suggestedBio.trim().slice(0, 400)
+          : cleanBio);
+
+      const advice = {
+        summary:
+          typeof parsed.summary === 'string' && parsed.summary.trim()
+            ? parsed.summary.trim()
+            : 'Profilen din har et varmt utgangspunkt, og med litt mer konkrete detaljer i bio og bildevariasjon blir det enda enklere å starte gode samtaler.',
+        bioStrengths:
+          typeof parsed.bioStrengths === 'string' && parsed.bioStrengths.trim()
+            ? parsed.bioStrengths.trim()
+            : 'Interessene dine gir et tydelig bilde av hva du trives med i hverdagen.',
+        bioTips: Array.isArray(parsed.bioTips)
+          ? parsed.bioTips
+              .map((t) => String(t).trim())
+              .filter(Boolean)
+              .slice(0, 3)
+          : [],
+        suggestedBio: primarySuggestedBio,
+        bioVariants:
+          cleanedVariants.length > 0
+            ? cleanedVariants
+            : primarySuggestedBio
+              ? [{ tone: 'Varm og personlig', text: primarySuggestedBio }]
+              : [],
+        photoStrengths:
+          typeof parsed.photoStrengths === 'string' &&
+          parsed.photoStrengths.trim()
+            ? parsed.photoStrengths.trim()
+            : 'Bildene dine formidler naturlig lys og en imøtekommende stemning.',
+        photoTips: Array.isArray(parsed.photoTips)
+          ? parsed.photoTips
+              .map((t) => String(t).trim())
+              .filter(Boolean)
+              .slice(0, 3)
+          : [],
+        nextPhotoIdea:
+          typeof parsed.nextPhotoIdea === 'string' && parsed.nextPhotoIdea.trim()
+            ? parsed.nextPhotoIdea.trim()
+            : 'Et naturlig bilde i dagslys der du holder på med en av favorittinteressene dine.',
+        generatedAt: formatNowTime(),
+      };
+
+      res.json({ ok: true, advice });
+    } catch (err) {
+      const mapped = mapGeminiErrorToNorwegian(err);
+      res.status(mapped.status).json({ error: mapped.message });
+    }
+  });
+
+  app.post('/api/ai/icebreakers', async (req, res) => {
+    try {
+      const { matchId, partner, previousIcebreakers } = (req.body || {}) as {
+        matchId?: string;
+        partner?: {
+          id?: string;
+          name?: string;
+          age?: number;
+          city?: string;
+          occupation?: string;
+          relationshipGoal?: string;
+          bio?: string;
+          interests?: string[];
+        };
+        previousIcebreakers?: string[];
+      };
+
+      if (!partner || !partner.name) {
+        res.status(400).json({ error: 'Mangler informasjon om matchen.' });
+        return;
+      }
+
+      const ai = getGenAIClient();
+
+      const partnerInterests = Array.isArray(partner.interests)
+        ? partner.interests.map((i) => String(i).trim()).filter(Boolean)
+        : [];
+      const myInterests = state.currentUser.interests || [];
+      const sharedInterests = partnerInterests.filter((pi) =>
+        myInterests.some((mi) => mi.toLowerCase() === pi.toLowerCase())
+      );
+      const prevList = Array.isArray(previousIcebreakers)
+        ? previousIcebreakers.map((s) => String(s).trim()).filter(Boolean)
+        : [];
+
+      const prompt = [
+        `Lag nøyaktig 3 kreative, sjarmerende og naturlige samtalestartere (icebreakers) på norsk til en ny match i en dating-app.`,
+        '',
+        `Om matchen (${partner.name}):`,
+        `- Alder og by: ${partner.age || ''} år, ${partner.city || ''}`,
+        `- Yrke/studier: ${partner.occupation || 'Ikke oppgitt'}`,
+        `- Ser etter: ${partner.relationshipGoal || 'Ikke oppgitt'}`,
+        `- Matchens interesser: ${
+          partnerInterests.length > 0
+            ? partnerInterests.join(', ')
+            : 'Generelle fritidsinteresser'
+        }`,
+        `- Matchens biografi: "${partner.bio || ''}"`,
+        '',
+        `Om avsenderen (${state.currentUser.name}):`,
+        `- Egne interesser: ${myInterests.join(', ')}`,
+        sharedInterests.length > 0
+          ? `- Felles interesser mellom dem: ${sharedInterests.join(', ')}`
+          : '',
+        prevList.length > 0
+          ? `- Unngå å gjenta disse tidligere forslagene: ${prevList
+              .map((q) => `"${q}"`)
+              .join(' | ')}`
+          : '',
+        '',
+        'Krav til de 3 forslagene:',
+        '- Hvert forslag MÅ ta utgangspunkt i matchens spesifikke interesser (og gjerne koble inn biografi eller felles interesser der det passer naturlig).',
+        '- Varier vinklingen mellom de 3 forslagene (f.eks. ett lekent enten/eller-spørsmål, ett nysgjerrig spørsmål om en konkret interesse, og ett forslag med et lite glimt i øyet om en ideell aktivitet).',
+        '- Hold hvert forslag kort og lettlest (1 setning, maks 125 tegn) uten klisjeer og uten emojier.',
+      ]
+        .filter(Boolean)
+        .join('\n');
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.1-flash-lite',
+        contents: prompt,
+        config: {
+          thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
+          systemInstruction:
+            'Du lager treffsikre, varme og kreative norske samtalestartere for en dating-app basert på matchens interesser. Ingen emojier, ingen generiske høflighetsfraser.',
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              icebreakers: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING },
+                description:
+                  'Nøyaktig 3 kreative norske samtalestartere tilpasset matchens interesser.',
+              },
+            },
+            required: ['icebreakers'],
+          },
+        },
+      });
+
+      const parsed = JSON.parse(response.text || '{}') as {
+        icebreakers?: string[];
+      };
+
+      const cleaned = Array.isArray(parsed.icebreakers)
+        ? parsed.icebreakers
+            .map((item) => String(item).trim())
+            .filter(Boolean)
+            .slice(0, 3)
+        : [];
+
+      if (cleaned.length < 3) {
+        throw new Error('Fikk for få forslag fra modellen.');
+      }
+
+      const nextTuple: [string, string, string] = [
+        cleaned[0],
+        cleaned[1],
+        cleaned[2],
+      ];
+
+      if (matchId) {
+        const targetMatch = state.matches.find((m) => m.id === matchId);
+        if (targetMatch) {
+          targetMatch.icebreakers = nextTuple;
+          persistState();
+          broadcast('state:sync', state);
+        }
+      }
+
+      res.json({ ok: true, icebreakers: nextTuple, state });
+    } catch (err) {
+      const mapped = mapGeminiErrorToNorwegian(err);
+      res.status(mapped.status).json({ error: mapped.message });
+    }
   });
 
   app.post('/api/streams/start', (req, res) => {

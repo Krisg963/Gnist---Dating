@@ -44,6 +44,15 @@ interface MessagesViewProps {
   onSelectProfile: (profile: DatingProfile) => void;
   onRequestBlockUser: (profile: DatingProfile) => void;
   onRequestReportUser: (profile: DatingProfile, matchId?: string) => void;
+  onGenerateIcebreakers: (
+    matchId: string,
+    partner: DatingProfile,
+    previousIcebreakers?: string[]
+  ) => Promise<{
+    ok: boolean;
+    icebreakers?: [string, string, string];
+    error?: string;
+  }>;
   onGoToSwipe: () => void;
 }
 
@@ -98,11 +107,18 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
   onSelectProfile,
   onRequestBlockUser,
   onRequestReportUser,
+  onGenerateIcebreakers,
   onGoToSwipe,
 }) => {
   const [draft, setDraft] = useState('');
   const [showIcebreakersDrawer, setShowIcebreakersDrawer] = useState(true);
   const [showLocationPrompt, setShowLocationPrompt] = useState(false);
+  const [generatingMatchId, setGeneratingMatchId] = useState<string | null>(
+    null
+  );
+  const [icebreakerErrorByMatch, setIcebreakerErrorByMatch] = useState<
+    Record<string, string | null>
+  >({});
   const [nowMs, setNowMs] = useState(() => Date.now());
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -185,6 +201,37 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
     if (started) {
       setShowLocationPrompt(false);
       setNowMs(Date.now());
+    }
+  };
+
+  const isGeneratingIcebreakers =
+    Boolean(activeMatch) && generatingMatchId === activeMatch?.id;
+  const activeIcebreakerError = activeMatch
+    ? icebreakerErrorByMatch[activeMatch.id] || null
+    : null;
+
+  const handleGenerateIcebreakerSuggestions = async () => {
+    if (!activeMatch || !activeProfile || isGeneratingIcebreakers) return;
+    setShowIcebreakersDrawer(true);
+    setGeneratingMatchId(activeMatch.id);
+    setIcebreakerErrorByMatch((prev) => ({ ...prev, [activeMatch.id]: null }));
+
+    const result = await onGenerateIcebreakers(
+      activeMatch.id,
+      activeProfile,
+      activeMatch.icebreakers
+    );
+
+    setGeneratingMatchId((curr) =>
+      curr === activeMatch.id ? null : curr
+    );
+
+    if (!result.ok) {
+      setIcebreakerErrorByMatch((prev) => ({
+        ...prev,
+        [activeMatch.id]:
+          result.error || 'Kunne ikke generere nye forslag akkurat nå.',
+      }));
     }
   };
 
@@ -548,7 +595,7 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
               </div>
             )}
 
-            {/* Collapsible 3 Curated Icebreakers Panel */}
+            {/* Collapsible 3 Curated & LLM-Generated Icebreakers Panel */}
             <AnimatePresence initial={false}>
               {showIcebreakersDrawer && (
                 <motion.div
@@ -556,30 +603,90 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -6 }}
                   transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
-                  className="px-4 sm:px-6 py-3.5 bg-zinc-50/90 dark:bg-zinc-950/60 border-b border-zinc-100 dark:border-zinc-800 shrink-0"
+                  className="px-4 sm:px-6 py-3.5 bg-zinc-50/90 dark:bg-zinc-950/60 border-b border-zinc-100 dark:border-zinc-800 shrink-0 space-y-2.5"
                 >
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs font-semibold text-zinc-600 dark:text-zinc-300 inline-flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
-                      <span>
-                        3 foreslåtte samtalestartere tilpasset {activeProfile.name} — trykk for å sende:
-                      </span>
-                    </p>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-200 inline-flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 shrink-0" />
+                        <span>
+                          3 samtalestartere tilpasset {activeProfile.name} — trykk for å sende:
+                        </span>
+                      </p>
+                      {activeProfile.interests.length > 0 && (
+                        <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5 truncate">
+                          Basert på {activeProfile.name}s interesser:{' '}
+                          <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                            {activeProfile.interests.join(' · ')}
+                          </span>
+                        </p>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={isGeneratingIcebreakers}
+                      onClick={() => void handleGenerateIcebreakerSuggestions()}
+                      className="min-h-[40px] px-3.5 py-2 rounded-xl bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-800 dark:hover:bg-white disabled:opacity-60 text-white dark:text-zinc-900 text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition whitespace-nowrap shrink-0"
+                    >
+                      {isGeneratingIcebreakers ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                          <span>Genererer forslag...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                          <span>Generer forslag</span>
+                        </>
+                      )}
+                    </button>
                   </div>
+
+                  {activeIcebreakerError && (
+                    <div
+                      role="alert"
+                      className="rounded-xl bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800/80 px-3 py-2 flex items-center justify-between gap-2"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <AlertCircle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                        <p className="text-xs text-amber-900 dark:text-amber-200 truncate">
+                          {activeIcebreakerError}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setIcebreakerErrorByMatch((prev) => ({
+                            ...prev,
+                            [activeMatch.id]: null,
+                          }))
+                        }
+                        className="min-h-[30px] min-w-[30px] flex items-center justify-center text-amber-700 dark:text-amber-300 hover:text-amber-950 dark:hover:text-white shrink-0"
+                        aria-label="Skjul feilmelding"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     {activeMatch.icebreakers.map((icebreaker, idx) => (
-                      <button
-                        key={idx}
+                      <motion.button
+                        key={`${idx}-${icebreaker.slice(0, 20)}`}
+                        initial={{ opacity: 0.7, y: 2 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.16 }}
                         type="button"
+                        disabled={isGeneratingIcebreakers}
                         onClick={() =>
                           onSendMessage(activeMatch.id, icebreaker, true)
                         }
-                        className="min-h-[48px] text-left p-3 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:border-rose-300 dark:hover:border-rose-500/50 hover:bg-rose-50/40 dark:hover:bg-rose-950/30 text-xs text-zinc-800 dark:text-zinc-200 leading-snug flex items-center justify-between gap-2 active:scale-[0.99] transition"
+                        className="min-h-[48px] text-left p-3 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:border-rose-300 dark:hover:border-rose-500/50 hover:bg-rose-50/40 dark:hover:bg-rose-950/30 disabled:opacity-60 text-xs text-zinc-800 dark:text-zinc-200 leading-snug flex items-center justify-between gap-2 active:scale-[0.99] transition"
                       >
                         <span>{icebreaker}</span>
                         <Send className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 shrink-0" />
-                      </button>
+                      </motion.button>
                     ))}
                   </div>
                 </motion.div>

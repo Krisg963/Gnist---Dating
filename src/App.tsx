@@ -105,6 +105,8 @@ export default function App() {
     blockUser,
     unblockUser,
     reportUser,
+    requestDatingCoach,
+    generateMatchIcebreakers,
   } = useRealtimeApp();
 
   const {
@@ -717,6 +719,7 @@ export default function App() {
                 onRequestReportUser={(p, mId) =>
                   setReportTarget({ profile: p, matchId: mId || null })
                 }
+                onGenerateIcebreakers={generateMatchIcebreakers}
                 onGoToSwipe={() => navigateToTab('swipe')}
               />
             )}
@@ -769,6 +772,7 @@ export default function App() {
                 onPreviewPublicModal={(pubProfile) =>
                   setSelectedProfile(pubProfile)
                 }
+                onRequestDatingCoach={requestDatingCoach}
               />
             )}
           </motion.div>

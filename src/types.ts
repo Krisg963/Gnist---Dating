@@ -181,6 +181,37 @@ export interface ReportedUserRecord {
   reportedAt: string;
 }
 
+export interface DatingCoachBioVariant {
+  tone: string;
+  text: string;
+}
+
+export interface DatingCoachAdvice {
+  summary: string;
+  bioStrengths: string;
+  bioTips: string[];
+  suggestedBio: string;
+  bioVariants?: DatingCoachBioVariant[];
+  photoStrengths?: string;
+  photoTips: string[];
+  nextPhotoIdea: string;
+  generatedAt: string;
+}
+
+export interface DatingCoachRequestPayload {
+  name: string;
+  age: number;
+  city: string;
+  occupation: string;
+  education: EducationLevel;
+  relationshipGoal: RelationshipGoal;
+  bio: string;
+  interests: string[];
+  photos: string[];
+  verified: boolean;
+  hasVideoIntro: boolean;
+}
+
 export interface ServerState {
   currentUser: CurrentUser;
   swipeStats: SwipeStats;
@@ -194,4 +225,5 @@ export interface ServerState {
   messagesByMatch: Record<string, ChatMessage[]>;
   streams: LiveStreamRoom[];
 }
+
 
